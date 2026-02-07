@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Save, Car, Calendar, DollarSign, Gift, AlertTriangle } from 'lucide-react'
-import { revenueStorage, driverStorage, settingsStorage, initializeData } from '../../utils/storage'
-import { mockDrivers, mockDeposits, mockRevenue } from '../../data/mockData'
+import { ArrowLeft, Save, Car, Calendar, DollarSign, Gift, AlertTriangle, Loader2 } from 'lucide-react'
+import { revenueStorage, driverStorage, settingsStorage } from '../../utils/firebaseStorage'
 
 export default function RevenueForm() {
     const navigate = useNavigate()
@@ -10,17 +9,31 @@ export default function RevenueForm() {
     const [settings, setSettings] = useState({ driverSharePercent: 60 })
     const [formData, setFormData] = useState({ vehicleCode: '', driverName: '', month: '', amount: '', bonus: '', penalty: '' })
     const [errors, setErrors] = useState({})
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
-        initializeData(mockDrivers, mockDeposits, mockRevenue)
-        const allDrivers = driverStorage.getAll()
-        setDrivers(allDrivers)
-        setSettings(settingsStorage.get())
-        if (allDrivers.length > 0) {
-            setFormData(prev => ({ ...prev, vehicleCode: allDrivers[0].vehicleCode, driverName: allDrivers[0].name }))
-        }
-        setFormData(prev => ({ ...prev, month: new Date().toISOString().slice(0, 7) }))
+        loadData()
     }, [])
+
+    const loadData = async () => {
+        setLoading(true)
+        try {
+            const [allDrivers, settingsData] = await Promise.all([
+                driverStorage.getAll(),
+                settingsStorage.get()
+            ])
+            setDrivers(allDrivers)
+            setSettings(settingsData)
+            if (allDrivers.length > 0) {
+                setFormData(prev => ({ ...prev, vehicleCode: allDrivers[0].vehicleCode, driverName: allDrivers[0].name }))
+            }
+            setFormData(prev => ({ ...prev, month: new Date().toISOString().slice(0, 7) }))
+        } catch (error) {
+            console.error('Error loading data:', error)
+        }
+        setLoading(false)
+    }
 
     const validate = () => {
         const newErrors = {}
@@ -31,18 +44,26 @@ export default function RevenueForm() {
         return Object.keys(newErrors).length === 0
     }
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
         if (!validate()) return
-        revenueStorage.add({
-            vehicleCode: formData.vehicleCode,
-            driverName: formData.driverName,
-            month: formData.month,
-            amount: parseInt(formData.amount) || 0,
-            bonus: parseInt(formData.bonus) || 0,
-            penalty: parseInt(formData.penalty) || 0,
-        })
-        navigate('/revenue')
+
+        setSaving(true)
+        try {
+            await revenueStorage.add({
+                vehicleCode: formData.vehicleCode,
+                driverName: formData.driverName,
+                month: formData.month,
+                amount: parseInt(formData.amount) || 0,
+                bonus: parseInt(formData.bonus) || 0,
+                penalty: parseInt(formData.penalty) || 0,
+            })
+            navigate('/revenue')
+        } catch (error) {
+            console.error('Error saving revenue:', error)
+            alert('Có lỗi xảy ra khi lưu dữ liệu!')
+        }
+        setSaving(false)
     }
 
     const handleVehicleChange = (e) => {
@@ -58,6 +79,14 @@ export default function RevenueForm() {
     const penalty = parseInt(formData.penalty) || 0
     const baseShare = (amount * settings.driverSharePercent) / 100
     const netAmount = baseShare + bonus - penalty
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-taxi-500" />
+            </div>
+        )
+    }
 
     return (
         <div className="animate-fade-in max-w-2xl mx-auto">
@@ -124,8 +153,9 @@ export default function RevenueForm() {
 
                 <div className="flex gap-3 mt-6">
                     <Link to="/revenue" className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-medium text-center">Hủy</Link>
-                    <button type="submit" className="flex-1 px-4 py-3 bg-taxi-500 text-white rounded-xl hover:bg-taxi-600 font-medium flex items-center justify-center gap-2">
-                        <Save size={20} /><span>Lưu</span>
+                    <button type="submit" disabled={saving} className="flex-1 px-4 py-3 bg-taxi-500 text-white rounded-xl hover:bg-taxi-600 font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+                        {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                        <span>Lưu</span>
                     </button>
                 </div>
             </form>

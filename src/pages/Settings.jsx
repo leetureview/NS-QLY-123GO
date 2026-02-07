@@ -1,14 +1,27 @@
 import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Save, Percent, Building2, User } from 'lucide-react'
-import { settingsStorage } from '../utils/storage'
+import { Settings as SettingsIcon, Save, Percent, Building2, User, Loader2 } from 'lucide-react'
+import { settingsStorage } from '../utils/firebaseStorage'
 
 export default function Settings() {
     const [settings, setSettings] = useState({ driverSharePercent: 60, companySharePercent: 40 })
     const [saved, setSaved] = useState(false)
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
-        setSettings(settingsStorage.get())
+        loadSettings()
     }, [])
+
+    const loadSettings = async () => {
+        setLoading(true)
+        try {
+            const data = await settingsStorage.get()
+            setSettings(data)
+        } catch (error) {
+            console.error('Error loading settings:', error)
+        }
+        setLoading(false)
+    }
 
     const handleDriverChange = (value) => {
         const driver = Math.min(100, Math.max(0, parseInt(value) || 0))
@@ -16,10 +29,25 @@ export default function Settings() {
         setSaved(false)
     }
 
-    const handleSave = () => {
-        settingsStorage.save(settings)
-        setSaved(true)
-        setTimeout(() => setSaved(false), 2000)
+    const handleSave = async () => {
+        setSaving(true)
+        try {
+            await settingsStorage.save(settings)
+            setSaved(true)
+            setTimeout(() => setSaved(false), 2000)
+        } catch (error) {
+            console.error('Error saving settings:', error)
+            alert('Có lỗi xảy ra khi lưu cài đặt!')
+        }
+        setSaving(false)
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-taxi-500" />
+            </div>
+        )
     }
 
     return (
@@ -87,9 +115,10 @@ export default function Settings() {
 
                 <button
                     onClick={handleSave}
-                    className={`w-full mt-6 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all ${saved ? 'bg-green-500 text-white' : 'bg-taxi-500 text-white hover:bg-taxi-600'}`}
+                    disabled={saving}
+                    className={`w-full mt-6 px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${saved ? 'bg-green-500 text-white' : 'bg-taxi-500 text-white hover:bg-taxi-600'}`}
                 >
-                    <Save size={20} />
+                    {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                     {saved ? 'Đã lưu!' : 'Lưu cài đặt'}
                 </button>
             </div>

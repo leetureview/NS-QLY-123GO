@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Users, TrendingUp, Wallet, Car, Plus, ArrowUpRight, ArrowDownRight } from 'lucide-react'
-import { driverStorage, depositStorage, revenueStorage, initializeData } from '../utils/storage'
-import { mockDrivers, mockDeposits, mockRevenue } from '../data/mockData'
+import { Users, TrendingUp, Wallet, Car, Plus, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react'
+import { driverStorage, depositStorage, revenueStorage } from '../utils/firebaseStorage'
 
 export default function Dashboard() {
     const [stats, setStats] = useState({
@@ -12,26 +11,36 @@ export default function Dashboard() {
         paidDeposits: 0,
     })
     const [recentDrivers, setRecentDrivers] = useState([])
+    const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        // Initialize with mock data if empty
-        initializeData(mockDrivers, mockDeposits, mockRevenue)
-
-        // Load stats
-        const drivers = driverStorage.getAll()
-        const deposits = depositStorage.getAll()
-        const currentMonth = new Date().toISOString().slice(0, 7)
-        const monthlyRevenue = revenueStorage.getTotalByMonth('2024-02') // Using mock month
-
-        setStats({
-            totalDrivers: drivers.length,
-            monthlyRevenue,
-            totalDeposits: deposits.reduce((sum, d) => sum + d.paidAmount, 0),
-            paidDeposits: deposits.filter(d => d.status === 'paid').length,
-        })
-
-        setRecentDrivers(drivers.slice(-5).reverse())
+        loadData()
     }, [])
+
+    const loadData = async () => {
+        setLoading(true)
+        try {
+            const drivers = await driverStorage.getAll()
+            const deposits = await depositStorage.getAll()
+            const revenues = await revenueStorage.getAll()
+            const currentMonth = new Date().toISOString().slice(0, 7)
+            const monthlyRevenue = revenues
+                .filter(r => r.month === currentMonth)
+                .reduce((sum, r) => sum + (r.amount || 0), 0)
+
+            setStats({
+                totalDrivers: drivers.length,
+                monthlyRevenue,
+                totalDeposits: deposits.reduce((sum, d) => sum + (d.paidAmount || 0), 0),
+                paidDeposits: deposits.filter(d => d.status === 'paid').length,
+            })
+
+            setRecentDrivers(drivers.slice(-5).reverse())
+        } catch (error) {
+            console.error('Error loading dashboard data:', error)
+        }
+        setLoading(false)
+    }
 
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('vi-VN', {
@@ -75,6 +84,14 @@ export default function Dashboard() {
         },
     ]
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-taxi-500" />
+            </div>
+        )
+    }
+
     return (
         <div className="animate-fade-in">
             {/* Header */}
@@ -97,7 +114,7 @@ export default function Dashboard() {
                                     <Icon className="text-white" size={24} />
                                 </div>
                                 <div className={`flex items-center gap-1 text-sm ${card.changeType === 'up' ? 'text-green-600' :
-                                        card.changeType === 'down' ? 'text-red-600' : 'text-gray-500'
+                                    card.changeType === 'down' ? 'text-red-600' : 'text-gray-500'
                                     }`}>
                                     {card.changeType === 'up' && <ArrowUpRight size={16} />}
                                     {card.changeType === 'down' && <ArrowDownRight size={16} />}
@@ -153,7 +170,7 @@ export default function Dashboard() {
                                 className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
                             >
                                 <div className="w-10 h-10 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center font-semibold">
-                                    {driver.name.charAt(0)}
+                                    {driver.name?.charAt(0)}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-medium text-gray-900 truncate">{driver.name}</p>

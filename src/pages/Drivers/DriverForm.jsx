@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Save, User, Car, Hash, Camera } from 'lucide-react'
-import { driverStorage, depositStorage } from '../../utils/storage'
+import { ArrowLeft, Save, User, Car, Hash, Camera, Loader2 } from 'lucide-react'
+import { driverStorage, depositStorage } from '../../utils/firebaseStorage'
 import { vehicleTypes } from '../../data/mockData'
 
 export default function DriverForm() {
@@ -11,14 +11,31 @@ export default function DriverForm() {
 
     const [formData, setFormData] = useState({ name: '', licensePlate: '', vehicleType: vehicleTypes[0], vehicleCode: '', avatar: null })
     const [errors, setErrors] = useState({})
+    const [loading, setLoading] = useState(false)
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
         if (isEditing) {
-            const driver = driverStorage.getById(id)
-            if (driver) setFormData({ name: driver.name, licensePlate: driver.licensePlate, vehicleType: driver.vehicleType, vehicleCode: driver.vehicleCode, avatar: driver.avatar || null })
-            else navigate('/drivers')
+            loadDriver()
         }
-    }, [id, isEditing, navigate])
+    }, [id, isEditing])
+
+    const loadDriver = async () => {
+        setLoading(true)
+        const driver = await driverStorage.getById(id)
+        if (driver) {
+            setFormData({
+                name: driver.name,
+                licensePlate: driver.licensePlate,
+                vehicleType: driver.vehicleType,
+                vehicleCode: driver.vehicleCode,
+                avatar: driver.avatar || null
+            })
+        } else {
+            navigate('/drivers')
+        }
+        setLoading(false)
+    }
 
     const validate = () => {
         const newErrors = {}
@@ -29,16 +46,26 @@ export default function DriverForm() {
         return Object.keys(newErrors).length === 0
     }
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
         if (!validate()) return
-        if (isEditing) {
-            driverStorage.update(id, formData)
-        } else {
-            const newDriver = driverStorage.add(formData)
-            depositStorage.createForDriver(newDriver)
+
+        setSaving(true)
+        try {
+            if (isEditing) {
+                await driverStorage.update(id, formData)
+            } else {
+                const newDriver = await driverStorage.add(formData)
+                if (newDriver) {
+                    await depositStorage.createForDriver(newDriver)
+                }
+            }
+            navigate('/drivers')
+        } catch (error) {
+            console.error('Error saving driver:', error)
+            alert('Có lỗi xảy ra khi lưu dữ liệu!')
         }
-        navigate('/drivers')
+        setSaving(false)
     }
 
     const handleChange = (field) => (e) => {
@@ -56,6 +83,14 @@ export default function DriverForm() {
         const reader = new FileReader()
         reader.onload = (e) => setFormData(prev => ({ ...prev, avatar: e.target?.result }))
         reader.readAsDataURL(file)
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-taxi-500" />
+            </div>
+        )
     }
 
     return (
@@ -118,8 +153,9 @@ export default function DriverForm() {
 
                 <div className="flex gap-3 mt-8">
                     <Link to="/drivers" className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-medium text-center">Hủy</Link>
-                    <button type="submit" className="flex-1 px-4 py-3 bg-taxi-500 text-white rounded-xl hover:bg-taxi-600 font-medium flex items-center justify-center gap-2">
-                        <Save size={20} /><span>{isEditing ? 'Cập nhật' : 'Thêm mới'}</span>
+                    <button type="submit" disabled={saving} className="flex-1 px-4 py-3 bg-taxi-500 text-white rounded-xl hover:bg-taxi-600 font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+                        {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                        <span>{isEditing ? 'Cập nhật' : 'Thêm mới'}</span>
                     </button>
                 </div>
             </form>

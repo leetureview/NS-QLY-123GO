@@ -1,34 +1,54 @@
 import { useEffect, useState } from 'react'
-import { FileText, Calendar, Download } from 'lucide-react'
-import { driverStorage, depositStorage, revenueStorage, nightShiftStorage, settingsStorage, initializeData } from '../utils/storage'
-import { mockDrivers, mockDeposits, mockRevenue } from '../data/mockData'
+import { FileText, Calendar, Loader2 } from 'lucide-react'
+import { driverStorage, depositStorage, revenueStorage, nightShiftStorage, settingsStorage } from '../utils/firebaseStorage'
 
 export default function Reports() {
     const [data, setData] = useState([])
     const [selectedMonth, setSelectedMonth] = useState('')
     const [settings, setSettings] = useState({ driverSharePercent: 60 })
+    const [loading, setLoading] = useState(true)
+    const [allData, setAllData] = useState({ drivers: [], deposits: [], revenues: [] })
 
     useEffect(() => {
-        initializeData(mockDrivers, mockDeposits, mockRevenue)
-        setSettings(settingsStorage.get())
-        const currentMonth = new Date().toISOString().slice(0, 7)
-        setSelectedMonth('2024-02') // Demo month
+        loadInitialData()
     }, [])
 
     useEffect(() => {
-        if (!selectedMonth) return
-        generateReport()
-    }, [selectedMonth])
+        if (selectedMonth && allData.drivers.length > 0) {
+            generateReport()
+        }
+    }, [selectedMonth, allData])
 
-    const generateReport = () => {
-        const drivers = driverStorage.getAll()
-        const deposits = depositStorage.getAll()
-        const revenues = revenueStorage.getByMonth(selectedMonth)
+    const loadInitialData = async () => {
+        setLoading(true)
+        try {
+            const [settingsData, drivers, deposits, revenues] = await Promise.all([
+                settingsStorage.get(),
+                driverStorage.getAll(),
+                depositStorage.getAll(),
+                revenueStorage.getAll()
+            ])
+            setSettings(settingsData)
+            setAllData({ drivers, deposits, revenues })
 
-        const reportData = drivers.map(driver => {
+            // Set default month
+            const months = [...new Set(revenues.map(r => r.month))].sort().reverse()
+            const currentMonth = new Date().toISOString().slice(0, 7)
+            setSelectedMonth(months[0] || currentMonth)
+        } catch (error) {
+            console.error('Error loading data:', error)
+        }
+        setLoading(false)
+    }
+
+    const generateReport = async () => {
+        const { drivers, deposits, revenues } = allData
+        const monthRevenues = revenues.filter(r => r.month === selectedMonth)
+
+        const reportData = await Promise.all(drivers.map(async driver => {
             const deposit = deposits.find(d => d.driverId === driver.id)
-            const revenue = revenues.find(r => r.vehicleCode === driver.vehicleCode)
-            const nightShifts = nightShiftStorage.countByDriverMonth(driver.id, selectedMonth)
+            const revenue = monthRevenues.find(r => r.vehicleCode === driver.vehicleCode)
+            const nightShifts = await nightShiftStorage.countByDriverMonth(driver.id, selectedMonth)
 
             const amount = revenue?.amount || 0
             const bonus = revenue?.bonus || 0
@@ -50,7 +70,7 @@ export default function Reports() {
                 nightShifts,
                 netSalary,
             }
-        })
+        }))
 
         setData(reportData)
     }
@@ -71,8 +91,16 @@ export default function Reports() {
         d.setMonth(d.getMonth() - i)
         months.push(d.toISOString().slice(0, 7))
     }
-    if (!months.includes('2024-02')) months.push('2024-02')
-    const uniqueMonths = [...new Set(months)].sort().reverse()
+    const revenueMonths = allData.revenues.map(r => r.month)
+    const uniqueMonths = [...new Set([...months, ...revenueMonths])].sort().reverse()
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-taxi-500" />
+            </div>
+        )
+    }
 
     return (
         <div className="animate-fade-in">
@@ -122,7 +150,7 @@ export default function Reports() {
             {/* Report table */}
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div className="p-4 border-b bg-gray-50">
-                    <h2 className="font-semibold text-gray-900">Chi tiết {formatMonth(selectedMonth)}</h2>
+                    <h2 className="font-semibold text-gray-900">Chi tiết {selectedMonth ? formatMonth(selectedMonth) : ''}</h2>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full">
@@ -148,7 +176,7 @@ export default function Reports() {
                                             {row.avatar ? (
                                                 <img src={row.avatar} className="w-8 h-8 rounded-full object-cover" />
                                             ) : (
-                                                <div className="w-8 h-8 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center text-sm font-semibold">{row.driverName.charAt(0)}</div>
+                                                <div className="w-8 h-8 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center text-sm font-semibold">{row.driverName?.charAt(0)}</div>
                                             )}
                                             <span className="font-medium">{row.driverName}</span>
                                         </div>

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Moon, User, Check, X } from 'lucide-react'
-import { nightShiftStorage, driverStorage, initializeData } from '../../utils/storage'
-import { mockDrivers, mockDeposits, mockRevenue } from '../../data/mockData'
+import { ChevronLeft, ChevronRight, Moon, User, Check, X, Loader2 } from 'lucide-react'
+import { nightShiftStorage, driverStorage } from '../../utils/firebaseStorage'
 
 export default function NightShiftCalendar() {
     const [currentDate, setCurrentDate] = useState(new Date())
@@ -9,14 +8,47 @@ export default function NightShiftCalendar() {
     const [drivers, setDrivers] = useState([])
     const [selectedDate, setSelectedDate] = useState(null)
     const [showModal, setShowModal] = useState(false)
+    const [loading, setLoading] = useState(true)
+    const [shiftCounts, setShiftCounts] = useState({})
 
     useEffect(() => {
-        initializeData(mockDrivers, mockDeposits, mockRevenue)
-        setDrivers(driverStorage.getAll())
-        loadShifts()
+        loadData()
     }, [])
 
-    const loadShifts = () => setShifts(nightShiftStorage.getAll())
+    useEffect(() => {
+        if (drivers.length > 0) {
+            updateShiftCounts()
+        }
+    }, [shifts, currentDate, drivers])
+
+    const loadData = async () => {
+        setLoading(true)
+        try {
+            const [driverData, shiftData] = await Promise.all([
+                driverStorage.getAll(),
+                nightShiftStorage.getAll()
+            ])
+            setDrivers(driverData)
+            setShifts(shiftData)
+        } catch (error) {
+            console.error('Error loading data:', error)
+        }
+        setLoading(false)
+    }
+
+    const loadShifts = async () => {
+        const data = await nightShiftStorage.getAll()
+        setShifts(data)
+    }
+
+    const updateShiftCounts = async () => {
+        const monthStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
+        const counts = {}
+        for (const driver of drivers) {
+            counts[driver.id] = await nightShiftStorage.countByDriverMonth(driver.id, monthStr)
+        }
+        setShiftCounts(counts)
+    }
 
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
@@ -38,14 +70,14 @@ export default function NightShiftCalendar() {
         setShowModal(true)
     }
 
-    const toggleDriver = (driverId, driverName) => {
+    const toggleDriver = async (driverId, driverName) => {
         const existing = shifts.find(s => s.date === selectedDate && s.driverId === driverId)
         if (existing) {
-            nightShiftStorage.remove(selectedDate, driverId)
+            await nightShiftStorage.remove(selectedDate, driverId)
         } else {
-            nightShiftStorage.add({ date: selectedDate, driverId, driverName })
+            await nightShiftStorage.add({ date: selectedDate, driverId, driverName })
         }
-        loadShifts()
+        await loadShifts()
     }
 
     const isDriverAssigned = (driverId) => shifts.some(s => s.date === selectedDate && s.driverId === driverId)
@@ -53,6 +85,14 @@ export default function NightShiftCalendar() {
     const calendarDays = []
     for (let i = 0; i < firstDayOfMonth; i++) calendarDays.push(null)
     for (let i = 1; i <= daysInMonth; i++) calendarDays.push(i)
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-taxi-500" />
+            </div>
+        )
+    }
 
     return (
         <div className="animate-fade-in">
@@ -91,7 +131,7 @@ export default function NightShiftCalendar() {
                                 <div className="text-sm font-medium text-gray-700 mb-1">{day}</div>
                                 <div className="space-y-0.5 overflow-hidden max-h-16">
                                     {dayShifts.slice(0, 2).map(s => (
-                                        <div key={s.id} className="text-xs bg-indigo-500 text-white px-1 py-0.5 rounded truncate">{s.driverName.split(' ').pop()}</div>
+                                        <div key={s.id} className="text-xs bg-indigo-500 text-white px-1 py-0.5 rounded truncate">{s.driverName?.split(' ').pop()}</div>
                                     ))}
                                     {dayShifts.length > 2 && <div className="text-xs text-indigo-600 font-medium">+{dayShifts.length - 2}</div>}
                                 </div>
@@ -105,10 +145,10 @@ export default function NightShiftCalendar() {
                     <h3 className="font-semibold text-gray-900 mb-3">Tổng kết tháng</h3>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         {drivers.map(d => {
-                            const count = nightShiftStorage.countByDriverMonth(d.id, monthStr)
+                            const count = shiftCounts[d.id] || 0
                             return (
                                 <div key={d.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                    <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-sm font-semibold">{d.name.charAt(0)}</div>
+                                    <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-sm font-semibold">{d.name?.charAt(0)}</div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate">{d.name}</p>
                                         <p className="text-xs text-gray-500">{count} ca</p>
@@ -139,7 +179,7 @@ export default function NightShiftCalendar() {
                                         className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${assigned ? 'bg-indigo-500 text-white' : 'bg-gray-50 hover:bg-gray-100'}`}
                                     >
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${assigned ? 'bg-white/20' : 'bg-indigo-100 text-indigo-600'}`}>
-                                            {d.avatar ? <img src={d.avatar} className="w-full h-full rounded-full object-cover" /> : d.name.charAt(0)}
+                                            {d.avatar ? <img src={d.avatar} className="w-full h-full rounded-full object-cover" /> : d.name?.charAt(0)}
                                         </div>
                                         <div className="flex-1 text-left">
                                             <p className="font-medium">{d.name}</p>

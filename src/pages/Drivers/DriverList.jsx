@@ -1,32 +1,44 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Edit2, Trash2, Car } from 'lucide-react'
-import { driverStorage, initializeData } from '../../utils/storage'
-import { mockDrivers, mockDeposits, mockRevenue } from '../../data/mockData'
+import { Plus, Search, Edit2, Trash2, Car, Loader2 } from 'lucide-react'
+import { driverStorage } from '../../utils/firebaseStorage'
 
 export default function DriverList() {
     const [drivers, setDrivers] = useState([])
     const [searchTerm, setSearchTerm] = useState('')
     const [deleteConfirm, setDeleteConfirm] = useState(null)
+    const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        initializeData(mockDrivers, mockDeposits, mockRevenue)
         loadDrivers()
     }, [])
 
-    const loadDrivers = () => setDrivers(driverStorage.getAll())
+    const loadDrivers = async () => {
+        setLoading(true)
+        const data = await driverStorage.getAll()
+        setDrivers(data)
+        setLoading(false)
+    }
 
-    const handleDelete = (id) => {
-        driverStorage.delete(id)
-        loadDrivers()
+    const handleDelete = async (id) => {
+        await driverStorage.delete(id)
+        await loadDrivers()
         setDeleteConfirm(null)
     }
 
     const filteredDrivers = drivers.filter(d =>
-        d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.vehicleCode.toLowerCase().includes(searchTerm.toLowerCase())
+        d.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        d.licensePlate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        d.vehicleCode?.toLowerCase().includes(searchTerm.toLowerCase())
     )
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-taxi-500" />
+            </div>
+        )
+    }
 
     return (
         <div className="animate-fade-in">
@@ -67,7 +79,7 @@ export default function DriverList() {
                                             {d.avatar ? (
                                                 <img src={d.avatar} alt={d.name} className="w-10 h-10 rounded-full object-cover" />
                                             ) : (
-                                                <div className="w-10 h-10 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center font-semibold">{d.name.charAt(0)}</div>
+                                                <div className="w-10 h-10 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center font-semibold">{d.name?.charAt(0)}</div>
                                             )}
                                             <span className="font-medium text-gray-900">{d.name}</span>
                                         </div>
@@ -97,7 +109,7 @@ export default function DriverList() {
                             {d.avatar ? (
                                 <img src={d.avatar} alt={d.name} className="w-12 h-12 rounded-full object-cover" />
                             ) : (
-                                <div className="w-12 h-12 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center font-semibold text-lg">{d.name.charAt(0)}</div>
+                                <div className="w-12 h-12 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center font-semibold text-lg">{d.name?.charAt(0)}</div>
                             )}
                             <div className="flex-1 min-w-0">
                                 <h3 className="font-semibold text-gray-900">{d.name}</h3>

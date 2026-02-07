@@ -1,33 +1,64 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, TrendingUp, Calendar, Car, Trash2, Gift, AlertTriangle } from 'lucide-react'
-import { revenueStorage, settingsStorage, initializeData } from '../../utils/storage'
-import { mockDrivers, mockDeposits, mockRevenue } from '../../data/mockData'
+import { Plus, TrendingUp, Calendar, Car, Trash2, Loader2 } from 'lucide-react'
+import { revenueStorage, settingsStorage } from '../../utils/firebaseStorage'
 
 export default function RevenueList() {
     const [revenues, setRevenues] = useState([])
     const [settings, setSettings] = useState({ driverSharePercent: 60 })
-    const [selectedMonth, setSelectedMonth] = useState('2024-02')
+    const [selectedMonth, setSelectedMonth] = useState('')
     const [deleteConfirm, setDeleteConfirm] = useState(null)
+    const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        initializeData(mockDrivers, mockDeposits, mockRevenue)
-        setSettings(settingsStorage.get())
-        loadRevenues()
+        loadData()
     }, [])
 
-    const loadRevenues = () => setRevenues(revenueStorage.getAll())
+    const loadData = async () => {
+        setLoading(true)
+        try {
+            const [revenueData, settingsData] = await Promise.all([
+                revenueStorage.getAll(),
+                settingsStorage.get()
+            ])
+            setRevenues(revenueData)
+            setSettings(settingsData)
+
+            // Set default month to current or first available
+            if (revenueData.length > 0) {
+                const months = [...new Set(revenueData.map(r => r.month))].sort().reverse()
+                setSelectedMonth(months[0] || '')
+            }
+        } catch (error) {
+            console.error('Error loading data:', error)
+        }
+        setLoading(false)
+    }
+
     const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
-    const handleDelete = (id) => { revenueStorage.delete(id); loadRevenues(); setDeleteConfirm(null) }
+
+    const handleDelete = async (id) => {
+        await revenueStorage.delete(id)
+        await loadData()
+        setDeleteConfirm(null)
+    }
 
     const months = [...new Set(revenues.map(r => r.month))].sort().reverse()
     const filteredRevenues = selectedMonth ? revenues.filter(r => r.month === selectedMonth) : revenues
-    const totalRevenue = filteredRevenues.reduce((sum, r) => sum + r.amount, 0)
+    const totalRevenue = filteredRevenues.reduce((sum, r) => sum + (r.amount || 0), 0)
     const formatMonth = (m) => `Tháng ${parseInt(m.split('-')[1])}/${m.split('-')[0]}`
 
     const calcNet = (r) => {
-        const base = (r.amount * settings.driverSharePercent) / 100
+        const base = ((r.amount || 0) * settings.driverSharePercent) / 100
         return base + (r.bonus || 0) - (r.penalty || 0)
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-taxi-500" />
+            </div>
+        )
     }
 
     return (
@@ -75,7 +106,7 @@ export default function RevenueList() {
                                 <tr key={r.id} className="hover:bg-gray-50">
                                     <td className="px-4 py-3"><span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-lg font-mono text-sm"><Car size={14} />{r.vehicleCode}</span></td>
                                     <td className="px-4 py-3 font-medium">{r.driverName}</td>
-                                    <td className="px-4 py-3 text-right font-mono">{formatCurrency(r.amount)}</td>
+                                    <td className="px-4 py-3 text-right font-mono">{formatCurrency(r.amount || 0)}</td>
                                     <td className="px-4 py-3 text-right font-mono text-green-600">{r.bonus ? `+${formatCurrency(r.bonus)}` : '-'}</td>
                                     <td className="px-4 py-3 text-right font-mono text-red-600">{r.penalty ? `-${formatCurrency(r.penalty)}` : '-'}</td>
                                     <td className="px-4 py-3 text-right font-bold text-taxi-600">{formatCurrency(calcNet(r))}</td>

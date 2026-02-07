@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react'
-import { Wallet, CheckCircle, XCircle, Clock, Edit2 } from 'lucide-react'
-import { depositStorage, initializeData } from '../../utils/storage'
-import { mockDrivers, mockDeposits, mockRevenue } from '../../data/mockData'
+import { Wallet, CheckCircle, XCircle, Clock, Edit2, Loader2 } from 'lucide-react'
+import { depositStorage } from '../../utils/firebaseStorage'
 
 export default function DepositList() {
     const [deposits, setDeposits] = useState([])
     const [editingId, setEditingId] = useState(null)
     const [editAmount, setEditAmount] = useState('')
     const [filter, setFilter] = useState('all')
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
-        initializeData(mockDrivers, mockDeposits, mockRevenue)
         loadDeposits()
     }, [])
 
-    const loadDeposits = () => {
-        setDeposits(depositStorage.getAll())
+    const loadDeposits = async () => {
+        setLoading(true)
+        const data = await depositStorage.getAll()
+        setDeposits(data)
+        setLoading(false)
     }
 
     const formatCurrency = (amount) => {
@@ -30,12 +33,14 @@ export default function DepositList() {
         setEditAmount(deposit.paidAmount.toString())
     }
 
-    const handleSave = (driverId) => {
+    const handleSave = async (driverId) => {
+        setSaving(true)
         const amount = parseInt(editAmount) || 0
-        depositStorage.update(driverId, amount)
-        loadDeposits()
+        await depositStorage.update(driverId, amount)
+        await loadDeposits()
         setEditingId(null)
         setEditAmount('')
+        setSaving(false)
     }
 
     const handleCancel = () => {
@@ -79,7 +84,15 @@ export default function DepositList() {
         paid: deposits.filter(d => d.status === 'paid').length,
         partial: deposits.filter(d => d.status === 'partial').length,
         unpaid: deposits.filter(d => d.status === 'unpaid').length,
-        totalAmount: deposits.reduce((sum, d) => sum + d.paidAmount, 0),
+        totalAmount: deposits.reduce((sum, d) => sum + (d.paidAmount || 0), 0),
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-taxi-500" />
+            </div>
+        )
     }
 
     return (
@@ -123,8 +136,8 @@ export default function DepositList() {
                             key={option.value}
                             onClick={() => setFilter(option.value)}
                             className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${filter === option.value
-                                    ? 'bg-taxi-500 text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                ? 'bg-taxi-500 text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                 }`}
                         >
                             {option.label}
@@ -142,7 +155,7 @@ export default function DepositList() {
                                 {/* Driver Info */}
                                 <div className="flex items-center gap-3 flex-1">
                                     <div className="w-12 h-12 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center font-semibold text-lg">
-                                        {deposit.driverName.charAt(0)}
+                                        {deposit.driverName?.charAt(0)}
                                     </div>
                                     <div>
                                         <h3 className="font-semibold text-gray-900">{deposit.driverName}</h3>
@@ -172,7 +185,7 @@ export default function DepositList() {
                                                 </div>
                                             ) : (
                                                 <p className="font-semibold text-gray-900">
-                                                    {formatCurrency(deposit.paidAmount)} / {formatCurrency(deposit.requiredAmount)}
+                                                    {formatCurrency(deposit.paidAmount || 0)} / {formatCurrency(deposit.requiredAmount)}
                                                 </p>
                                             )}
                                         </div>
@@ -190,8 +203,10 @@ export default function DepositList() {
                                             </button>
                                             <button
                                                 onClick={() => handleSave(deposit.driverId)}
-                                                className="px-3 py-1.5 bg-taxi-500 text-white hover:bg-taxi-600 rounded-lg text-sm font-medium"
+                                                disabled={saving}
+                                                className="px-3 py-1.5 bg-taxi-500 text-white hover:bg-taxi-600 rounded-lg text-sm font-medium flex items-center gap-1"
                                             >
+                                                {saving && <Loader2 size={14} className="animate-spin" />}
                                                 Lưu
                                             </button>
                                         </div>
@@ -211,12 +226,12 @@ export default function DepositList() {
                                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                                     <div
                                         className={`h-full rounded-full transition-all duration-500 ${deposit.status === 'paid'
-                                                ? 'bg-green-500'
-                                                : deposit.status === 'partial'
-                                                    ? 'bg-yellow-500'
-                                                    : 'bg-gray-300'
+                                            ? 'bg-green-500'
+                                            : deposit.status === 'partial'
+                                                ? 'bg-yellow-500'
+                                                : 'bg-gray-300'
                                             }`}
-                                        style={{ width: `${Math.min((deposit.paidAmount / deposit.requiredAmount) * 100, 100)}%` }}
+                                        style={{ width: `${Math.min(((deposit.paidAmount || 0) / deposit.requiredAmount) * 100, 100)}%` }}
                                     />
                                 </div>
                             </div>
