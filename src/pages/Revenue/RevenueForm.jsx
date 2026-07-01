@@ -7,7 +7,7 @@ export default function RevenueForm() {
     const navigate = useNavigate()
     const [drivers, setDrivers] = useState([])
     const [settings, setSettings] = useState({ driverSharePercent: 60 })
-    const [formData, setFormData] = useState({ vehicleCode: '', driverName: '', month: '', amount: '', bonus: '', penalty: '' })
+    const [formData, setFormData] = useState({ vehicleCode: '', driverName: '', date: '', amount: '', bonus: '', penalty: '', airportSubsidy: '' })
     const [errors, setErrors] = useState({})
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
@@ -28,7 +28,7 @@ export default function RevenueForm() {
             if (allDrivers.length > 0) {
                 setFormData(prev => ({ ...prev, vehicleCode: allDrivers[0].vehicleCode, driverName: allDrivers[0].name }))
             }
-            setFormData(prev => ({ ...prev, month: new Date().toISOString().slice(0, 7) }))
+            setFormData(prev => ({ ...prev, date: new Date().toISOString().slice(0, 10) }))
         } catch (error) {
             console.error('Error loading data:', error)
         }
@@ -38,7 +38,7 @@ export default function RevenueForm() {
     const validate = () => {
         const newErrors = {}
         if (!formData.vehicleCode) newErrors.vehicleCode = 'Vui lòng chọn xe'
-        if (!formData.month) newErrors.month = 'Vui lòng chọn tháng'
+        if (!formData.date) newErrors.date = 'Vui lòng chọn ngày nhật trình'
         if (!formData.amount || parseInt(formData.amount) <= 0) newErrors.amount = 'Vui lòng nhập doanh thu'
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
@@ -53,10 +53,12 @@ export default function RevenueForm() {
             await revenueStorage.add({
                 vehicleCode: formData.vehicleCode,
                 driverName: formData.driverName,
-                month: formData.month,
+                month: formData.date.slice(0, 7),
+                date: formData.date,
                 amount: parseInt(formData.amount) || 0,
                 bonus: parseInt(formData.bonus) || 0,
                 penalty: parseInt(formData.penalty) || 0,
+                airportSubsidy: parseInt(formData.airportSubsidy) || 0,
             })
             navigate('/revenue')
         } catch (error) {
@@ -74,10 +76,19 @@ export default function RevenueForm() {
 
     const formatCurrency = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)
 
+    const getDriverVehicleType = () => {
+        const foundDriver = drivers.find(d => d.vehicleCode === formData.vehicleCode)
+        return foundDriver ? foundDriver.vehicleType : null
+    }
+    const currentVehicleType = getDriverVehicleType()
+    const sharePercent = settings.sharesByVehicleType?.[currentVehicleType] ?? settings.driverSharePercent ?? 60
+
     const amount = parseInt(formData.amount) || 0
     const bonus = parseInt(formData.bonus) || 0
     const penalty = parseInt(formData.penalty) || 0
-    const baseShare = (amount * settings.driverSharePercent) / 100
+    const airportSubsidy = parseInt(formData.airportSubsidy) || 0
+    const totalAmount = amount + airportSubsidy
+    const baseShare = (totalAmount * sharePercent) / 100
     const netAmount = baseShare + bonus - penalty
 
     if (loading) {
@@ -108,16 +119,23 @@ export default function RevenueForm() {
                         </select>
                     </div>
 
-                    {/* Month */}
+                    {/* Date */}
                     <div>
-                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"><Calendar size={16} />Tháng</label>
-                        <input type="month" value={formData.month} onChange={(e) => setFormData(prev => ({ ...prev, month: e.target.value }))} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none" />
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"><Calendar size={16} />Ngày nhật trình</label>
+                        <input type="date" value={formData.date} onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))} className={`w-full px-4 py-3 rounded-xl border ${errors.date ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none`} />
                     </div>
 
                     {/* Amount */}
                     <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"><DollarSign size={16} />Doanh thu (VND)</label>
                         <input type="number" value={formData.amount} onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))} placeholder="15000000" className={`w-full px-4 py-3 rounded-xl border ${errors.amount ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none font-mono text-lg`} />
+                    </div>
+
+                    {/* Airport Subsidy */}
+                    <div>
+                        <label className="flex items-center gap-2 text-sm font-medium text-taxi-700 mb-2"><Car size={16} />Bù cuốc sân bay (VND)</label>
+                        <input type="number" value={formData.airportSubsidy} onChange={(e) => setFormData(prev => ({ ...prev, airportSubsidy: e.target.value }))} placeholder="0" className="w-full px-4 py-3 rounded-xl border border-taxi-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none font-mono bg-orange-50" />
+                        <p className="text-xs text-gray-500 mt-1">Cộng thẳng vào lương thực trả của tài xế</p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -138,8 +156,9 @@ export default function RevenueForm() {
                         <div className="p-4 bg-gradient-to-r from-taxi-50 to-green-50 rounded-xl border border-taxi-200">
                             <h3 className="font-semibold text-gray-800 mb-3">Công thức tính lương</h3>
                             <div className="space-y-2 text-sm">
-                                <div className="flex justify-between"><span>Doanh thu gốc:</span><span className="font-mono">{formatCurrency(amount)}</span></div>
-                                <div className="flex justify-between text-taxi-700"><span>× {settings.driverSharePercent}% (phần tài xế):</span><span className="font-mono">{formatCurrency(baseShare)}</span></div>
+                                <div className="flex justify-between"><span>Doanh thu báo khách:</span><span className="font-mono">{formatCurrency(amount)}</span></div>
+                                {airportSubsidy > 0 && <div className="flex justify-between text-orange-600"><span>+ Bù sân bay (gộp vào doanh thu):</span><span className="font-mono">+{formatCurrency(airportSubsidy)}</span></div>}
+                                <div className="flex justify-between text-taxi-700"><span>× {sharePercent}% (phần tài xế từ tổng HT):</span><span className="font-mono">{formatCurrency(baseShare)}</span></div>
                                 {bonus > 0 && <div className="flex justify-between text-green-700"><span>+ Thưởng:</span><span className="font-mono">+{formatCurrency(bonus)}</span></div>}
                                 {penalty > 0 && <div className="flex justify-between text-red-700"><span>- Phạt:</span><span className="font-mono">-{formatCurrency(penalty)}</span></div>}
                                 <div className="flex justify-between pt-2 border-t border-taxi-200 text-lg font-bold">

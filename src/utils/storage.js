@@ -6,6 +6,8 @@ const STORAGE_KEYS = {
     REVENUE: 'taxi_revenue',
     NIGHT_SHIFTS: 'taxi_night_shifts',
     SETTINGS: 'taxi_settings',
+    EXPENSES: 'taxi_expenses',
+    ADVANCES: 'taxi_advances',
 }
 
 // Default settings
@@ -97,6 +99,18 @@ export const depositStorage = {
         }
         return null
     },
+    updateRequiredAmount: (driverId, newRequiredAmount) => {
+        const deposits = depositStorage.getAll()
+        const index = deposits.findIndex(d => d.driverId === driverId)
+        if (index !== -1) {
+            const deposit = deposits[index]
+            deposit.requiredAmount = newRequiredAmount
+            deposit.status = deposit.paidAmount >= newRequiredAmount ? 'paid' : deposit.paidAmount > 0 ? 'partial' : 'unpaid'
+            storage.set(STORAGE_KEYS.DEPOSITS, deposits)
+            return deposit
+        }
+        return null
+    },
     createForDriver: (driver) => {
         const deposits = depositStorage.getAll()
         const newDeposit = { id: Date.now().toString(), driverId: driver.id, driverName: driver.name, requiredAmount: 5000000, paidAmount: 0, status: 'unpaid', lastPaymentDate: null }
@@ -183,9 +197,73 @@ export const nightShiftStorage = {
     countByDriverMonth: (driverId, month) => nightShiftStorage.getByMonth(month).filter(s => s.driverId === driverId).length,
 }
 
+// Expenses operations
+export const expenseStorage = {
+    getAll: () => storage.get(STORAGE_KEYS.EXPENSES) || [],
+    getByMonth: (month) => expenseStorage.getAll().filter(e => e.date.startsWith(month)),
+    add: (expense) => {
+        const expenses = expenseStorage.getAll()
+        const newExpense = { ...expense, id: Date.now().toString() }
+        expenses.push(newExpense)
+        storage.set(STORAGE_KEYS.EXPENSES, expenses)
+        return newExpense
+    },
+    update: (id, updates) => {
+        const expenses = expenseStorage.getAll()
+        const index = expenses.findIndex(e => e.id === id)
+        if (index !== -1) {
+            expenses[index] = { ...expenses[index], ...updates }
+            storage.set(STORAGE_KEYS.EXPENSES, expenses)
+            return expenses[index]
+        }
+        return null
+    },
+    delete: (id) => {
+        const expenses = expenseStorage.getAll()
+        storage.set(STORAGE_KEYS.EXPENSES, expenses.filter(e => e.id !== id))
+        return true
+    },
+    getTotalByMonth: (month) => expenseStorage.getByMonth(month).reduce((sum, e) => sum + e.amount, 0),
+    seed: (data) => storage.set(STORAGE_KEYS.EXPENSES, data),
+}
+
+// Advance operations
+export const advanceStorage = {
+    getAll: () => storage.get(STORAGE_KEYS.ADVANCES) || [],
+    getByMonth: (month) => advanceStorage.getAll().filter(a => a.date.startsWith(month)),
+    getByDriverId: (driverId) => advanceStorage.getAll().filter(a => a.driverId === driverId),
+    add: (advance) => {
+        const advances = advanceStorage.getAll()
+        const newAdvance = { ...advance, id: Date.now().toString(), status: advance.status || 'pending' }
+        advances.push(newAdvance)
+        storage.set(STORAGE_KEYS.ADVANCES, advances)
+        return newAdvance
+    },
+    update: (id, updates) => {
+        const advances = advanceStorage.getAll()
+        const index = advances.findIndex(a => a.id === id)
+        if (index !== -1) {
+            advances[index] = { ...advances[index], ...updates }
+            storage.set(STORAGE_KEYS.ADVANCES, advances)
+            return advances[index]
+        }
+        return null
+    },
+    delete: (id) => {
+        const advances = advanceStorage.getAll()
+        storage.set(STORAGE_KEYS.ADVANCES, advances.filter(a => a.id !== id))
+        return true
+    },
+    seed: (data) => storage.set(STORAGE_KEYS.ADVANCES, data),
+}
+
 // Initialize with mock data if empty
-export const initializeData = (mockDrivers, mockDeposits, mockRevenue) => {
+
+export const initializeData = (mockDrivers, mockDeposits, mockRevenue, mockExpenses, mockAdvances) => {
     if (driverStorage.getAll().length === 0) driverStorage.seed(mockDrivers)
     if (depositStorage.getAll().length === 0) depositStorage.seed(mockDeposits)
     if (revenueStorage.getAll().length === 0) revenueStorage.seed(mockRevenue)
+    if (expenseStorage.getAll().length === 0 && mockExpenses) expenseStorage.seed(mockExpenses)
+    if (advanceStorage.getAll().length === 0 && mockAdvances) advanceStorage.seed(mockAdvances)
 }
+

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Users, TrendingUp, Wallet, Car, Plus, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react'
-import { driverStorage, depositStorage, revenueStorage } from '../utils/firebaseStorage'
+import { driverStorage, depositStorage, revenueStorage, expenseStorage, advanceStorage } from '../utils/firebaseStorage'
 
 export default function Dashboard() {
     const [stats, setStats] = useState({
@@ -9,9 +9,12 @@ export default function Dashboard() {
         monthlyRevenue: 0,
         totalDeposits: 0,
         paidDeposits: 0,
+        totalCash: 0,
     })
     const [recentDrivers, setRecentDrivers] = useState([])
     const [loading, setLoading] = useState(true)
+    const [chartData, setChartData] = useState([])
+    const [depositRate, setDepositRate] = useState({ percent: 0, paid: 0, required: 0 })
 
     useEffect(() => {
         loadData()
@@ -20,22 +23,63 @@ export default function Dashboard() {
     const loadData = async () => {
         setLoading(true)
         try {
-            const drivers = await driverStorage.getAll()
-            const deposits = await depositStorage.getAll()
-            const revenues = await revenueStorage.getAll()
+            const [drivers, deposits, revenues, expenses, advances] = await Promise.all([
+                driverStorage.getAll(),
+                depositStorage.getAll(),
+                revenueStorage.getAll(),
+                expenseStorage.getAll(),
+                advanceStorage.getAll()
+            ])
+
             const currentMonth = new Date().toISOString().slice(0, 7)
             const monthlyRevenue = revenues
                 .filter(r => r.month === currentMonth)
-                .reduce((sum, r) => sum + (r.amount || 0), 0)
+                .reduce((sum, r) => sum + (Number(r.amount) || 0) + (Number(r.airportSubsidy) || 0), 0)
+
+            const totalRevenue = revenues.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+            const totalAirportSubsidy = revenues.reduce((sum, r) => sum + (Number(r.airportSubsidy) || 0), 0)
+            const totalDeposits = deposits.reduce((sum, d) => sum + (Number(d.paidAmount) || 0), 0)
+            const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+            const totalAdvances = advances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0)
+
+            // Cash = (Total Revenue [without subsidy] + Total Deposits) - Total Advances - Total Expenses - Total Airport Subsidy
+            const totalCash = (totalRevenue + totalDeposits) - totalAdvances - totalExpenses - totalAirportSubsidy
 
             setStats({
                 totalDrivers: drivers.length,
                 monthlyRevenue,
-                totalDeposits: deposits.reduce((sum, d) => sum + (d.paidAmount || 0), 0),
+                totalDeposits,
                 paidDeposits: deposits.filter(d => d.status === 'paid').length,
+                totalCash,
             })
 
             setRecentDrivers(drivers.slice(-5).reverse())
+
+            // Calculate past 6 months revenues
+            const getPast6Months = () => {
+                const months = []
+                const now = new Date()
+                for (let i = 5; i >= 0; i--) {
+                    const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+                    months.push(date.toISOString().slice(0, 7))
+                }
+                return months
+            }
+
+            const last6Months = getPast6Months()
+            const monthlyRevenues = last6Months.map(month => {
+                const amount = revenues
+                    .filter(r => r.month === month)
+                    .reduce((sum, r) => sum + (Number(r.amount) || 0) + (Number(r.airportSubsidy) || 0), 0)
+                return { month, amount }
+            })
+            setChartData(monthlyRevenues)
+
+            // Calculate deposit collection rate
+            const totalReq = deposits.reduce((sum, d) => sum + (Number(d.requiredAmount) || 0), 0)
+            const totalPaid = deposits.reduce((sum, d) => sum + (Number(d.paidAmount) || 0), 0)
+            const percent = totalReq > 0 ? Math.round((totalPaid / totalReq) * 100) : 0
+            setDepositRate({ percent, paid: totalPaid, required: totalReq })
         } catch (error) {
             console.error('Error loading dashboard data:', error)
         }
@@ -51,20 +95,20 @@ export default function Dashboard() {
 
     const statCards = [
         {
-            title: 'Tổng tài xế',
-            value: stats.totalDrivers,
-            icon: Users,
-            color: 'bg-blue-500',
-            change: '+2',
-            changeType: 'up',
+            title: 'Tổng tiền mặt đang có',
+            value: formatCurrency(stats.totalCash),
+            icon: Wallet,
+            color: 'bg-yellow-500',
+            change: 'Khớp quỹ',
+            changeType: 'neutral',
         },
         {
-            title: 'Doanh thu tháng',
+            title: 'Doanh thu tháng (gồm sân bay)',
             value: formatCurrency(stats.monthlyRevenue),
             icon: TrendingUp,
             color: 'bg-taxi-500',
-            change: '+12%',
-            changeType: 'up',
+            change: 'tháng này',
+            changeType: 'neutral',
         },
         {
             title: 'Tiền cọc đã thu',
@@ -126,6 +170,157 @@ export default function Dashboard() {
                         </div>
                     )
                 })}
+            </div>
+
+            {/* Visual Analytics Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-8">
+                {/* 6-Month Revenue Bar Chart */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm lg:col-span-2 flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900">Doanh thu hệ thống 6 tháng qua</h2>
+                            <p className="text-sm text-gray-400">Tổng hợp doanh thu từ tất cả các đầu xe</p>
+                        </div>
+                    </div>
+                    
+                    {/* SVG Bar Chart */}
+                    <div className="w-full pt-2">
+                        <svg viewBox="0 0 500 180" className="w-full h-44 overflow-visible">
+                            {/* Grids and Y labels */}
+                            {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
+                                const maxVal = chartData.length > 0 ? Math.max(...chartData.map(d => d.amount), 20000000) : 20000000;
+                                const val = Math.round(maxVal * ratio);
+                                const y = 20 + 120 * (1 - ratio);
+                                return (
+                                    <g key={index} className="text-[10px] fill-gray-400">
+                                        <line 
+                                            x1="50" 
+                                            y1={y} 
+                                            x2="480" 
+                                            y2={y} 
+                                            stroke="#f1f5f9" 
+                                            strokeWidth="1.5" 
+                                        />
+                                        <text x="40" y={y + 3} textAnchor="end">
+                                            {val === 0 ? '0' : `${Math.round(val / 1000000)}Tr`}
+                                        </text>
+                                    </g>
+                                );
+                            })}
+
+                            {/* Bars */}
+                            {chartData.map((d, index) => {
+                                const maxVal = chartData.length > 0 ? Math.max(...chartData.map(item => item.amount), 20000000) : 20000000;
+                                const barWidth = 32;
+                                const colWidth = (480 - 50) / 6;
+                                const x = 50 + colWidth * index + (colWidth - barWidth) / 2;
+                                const height = maxVal > 0 ? (d.amount / maxVal) * 120 : 0;
+                                const y = 20 + 120 - height;
+                                const formattedMonth = () => {
+                                    const [year, month] = d.month.split('-');
+                                    return `T${parseInt(month)}`;
+                                };
+
+                                return (
+                                    <g key={d.month} className="group">
+                                        <defs>
+                                            <linearGradient id={`blue-grad-${d.month}`} x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#f59e0b" />
+                                                <stop offset="100%" stopColor="#fde68a" stopOpacity="0.1" />
+                                            </linearGradient>
+                                        </defs>
+
+                                        {/* Bar */}
+                                        <rect
+                                            x={x}
+                                            y={y}
+                                            width={barWidth}
+                                            height={Math.max(1, height)}
+                                            rx="6"
+                                            fill={`url(#blue-grad-${d.month})`}
+                                            className="transition-all duration-300 hover:fill-taxi-600 cursor-pointer"
+                                        />
+
+                                        {/* Tooltip value */}
+                                        <text
+                                            x={x + barWidth / 2}
+                                            y={y - 6}
+                                            textAnchor="middle"
+                                            className="text-[10px] font-bold fill-taxi-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                        >
+                                            {formatCurrency(d.amount).replace(',00 ₫', '').replace(' ₫', '')}
+                                        </text>
+
+                                        {/* Month Label */}
+                                        <text
+                                            x={x + barWidth / 2}
+                                            y="156"
+                                            textAnchor="middle"
+                                            className="text-xs fill-gray-500 font-medium"
+                                        >
+                                            {formattedMonth()}
+                                        </text>
+                                    </g>
+                                );
+                            })}
+                            
+                            {/* Baseline */}
+                            <line x1="50" y1="140" x2="480" y2="140" stroke="#cbd5e1" strokeWidth="1.5" />
+                        </svg>
+                    </div>
+                </div>
+
+                {/* Deposit Collection Progress Circular Gauge */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm lg:col-span-1 flex flex-col justify-between">
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-900">Tỷ lệ thu hồi tiền cọc</h2>
+                        <p className="text-sm text-gray-400">Tiến độ đóng tiền thế chân của các tài xế</p>
+                    </div>
+
+                    <div className="relative flex items-center justify-center my-6">
+                        {/* Gauge */}
+                        <svg className="w-32 h-32 transform -rotate-90">
+                            {/* Background Circle */}
+                            <circle
+                                cx="64"
+                                cy="64"
+                                r="52"
+                                stroke="#f1f5f9"
+                                strokeWidth="10"
+                                fill="transparent"
+                            />
+                            {/* Foreground Progress Circle */}
+                            <circle
+                                cx="64"
+                                cy="64"
+                                r="52"
+                                stroke="#a855f7" // Purple-500
+                                strokeWidth="10"
+                                fill="transparent"
+                                strokeDasharray={2 * Math.PI * 52}
+                                strokeDashoffset={2 * Math.PI * 52 * (1 - depositRate.percent / 100)}
+                                strokeLinecap="round"
+                                className="transition-all duration-1000 ease-out"
+                            />
+                        </svg>
+                        {/* Percentage Text inside */}
+                        <div className="absolute flex flex-col items-center justify-center text-center">
+                            <span className="text-2xl font-bold text-gray-800">{depositRate.percent}%</span>
+                            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Đã thu</span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-gray-50 text-sm">
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Đã đóng:</span>
+                            <span className="font-semibold text-emerald-600">{formatCurrency(depositRate.paid)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Tổng yêu cầu:</span>
+                            <span className="font-medium text-gray-700">{formatCurrency(depositRate.required)}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Quick Actions & Recent Activity */}

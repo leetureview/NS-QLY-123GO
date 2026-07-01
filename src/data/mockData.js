@@ -148,7 +148,73 @@ export const mockRevenue = [
     },
 ]
 
+export const mockExpenses = [
+    {
+        id: '1',
+        title: 'Tiền thuê văn phòng',
+        category: 'rent',
+        amount: 15000000,
+        date: '2024-03-01',
+        description: 'Thanh toán tiền thuê tháng 3/2024',
+    },
+    {
+        id: '2',
+        title: 'Tiền điện',
+        category: 'utilities',
+        amount: 2500000,
+        date: '2024-03-05',
+        description: 'Tiền điện tháng 2',
+    },
+    {
+        id: '3',
+        title: 'Tiền mạng Internet',
+        category: 'utilities',
+        amount: 800000,
+        date: '2024-03-10',
+        description: 'Cước Viettel tháng 3',
+    },
+    {
+        id: '4',
+        title: 'Bảo dưỡng xe TX001',
+        category: 'maintenance',
+        amount: 1200000,
+        date: '2024-03-12',
+        description: 'Thay dầu và lọc nhớt định kỳ',
+    },
+    {
+        id: '5',
+        title: 'Mua văn phòng phẩm',
+        category: 'office',
+        amount: 500000,
+        date: '2024-03-15',
+        description: 'Giấy in, bút lông',
+    },
+]
+
+export const mockAdvances = [
+    {
+        id: '1',
+        driverId: '1',
+        driverName: 'Nguyễn Văn An',
+        date: '2024-03-05',
+        amount: 2000000,
+        reason: 'Khám bệnh',
+        status: 'pending',
+    },
+    {
+        id: '2',
+        driverId: '2',
+        driverName: 'Trần Văn Bình',
+        date: '2024-03-10',
+        amount: 1000000,
+        reason: 'Tiêu dùng cá nhân',
+        status: 'paid',
+    },
+]
+
 export const vehicleTypes = [
+    'VF5',
+    'Minio Green',
     'Toyota Vios',
     'Toyota Camry',
     'Hyundai Accent',
@@ -160,3 +226,4 @@ export const vehicleTypes = [
     'Mazda 3',
     'VinFast Fadil',
 ]
+

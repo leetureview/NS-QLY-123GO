@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { FileText, Calendar, Loader2 } from 'lucide-react'
-import { driverStorage, depositStorage, revenueStorage, nightShiftStorage, settingsStorage } from '../utils/firebaseStorage'
+import { FileText, Calendar, Loader2, Printer } from 'lucide-react'
+import { driverStorage, revenueStorage, settingsStorage, expenseStorage } from '../utils/firebaseStorage'
 
 export default function Reports() {
     const [data, setData] = useState([])
     const [selectedMonth, setSelectedMonth] = useState('')
     const [settings, setSettings] = useState({ driverSharePercent: 60 })
     const [loading, setLoading] = useState(true)
-    const [allData, setAllData] = useState({ drivers: [], deposits: [], revenues: [] })
+    const [allData, setAllData] = useState({ drivers: [], revenues: [], expenses: [] })
 
     useEffect(() => {
         loadInitialData()
@@ -22,14 +22,14 @@ export default function Reports() {
     const loadInitialData = async () => {
         setLoading(true)
         try {
-            const [settingsData, drivers, deposits, revenues] = await Promise.all([
+            const [settingsData, drivers, revenues, expenses] = await Promise.all([
                 settingsStorage.get(),
                 driverStorage.getAll(),
-                depositStorage.getAll(),
-                revenueStorage.getAll()
+                revenueStorage.getAll(),
+                expenseStorage.getAll()
             ])
             setSettings(settingsData)
-            setAllData({ drivers, deposits, revenues })
+            setAllData({ drivers, revenues, expenses })
 
             // Set default month
             const months = [...new Set(revenues.map(r => r.month))].sort().reverse()
@@ -42,19 +42,27 @@ export default function Reports() {
     }
 
     const generateReport = async () => {
-        const { drivers, deposits, revenues } = allData
+        const { drivers, revenues, expenses } = allData
         const monthRevenues = revenues.filter(r => r.month === selectedMonth)
+        const monthExpenses = expenses.filter(e => e.date && e.date.startsWith(selectedMonth))
 
         const reportData = await Promise.all(drivers.map(async driver => {
-            const deposit = deposits.find(d => d.driverId === driver.id)
-            const revenue = monthRevenues.find(r => r.vehicleCode === driver.vehicleCode)
-            const nightShifts = await nightShiftStorage.countByDriverMonth(driver.id, selectedMonth)
+            const vehicleRevenues = monthRevenues.filter(r => r.vehicleCode === driver.vehicleCode)
 
-            const amount = revenue?.amount || 0
-            const bonus = revenue?.bonus || 0
-            const penalty = revenue?.penalty || 0
-            const baseShare = (amount * settings.driverSharePercent) / 100
+            const amount = vehicleRevenues.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+            const bonus = vehicleRevenues.reduce((sum, r) => sum + (Number(r.bonus) || 0), 0)
+            const penalty = vehicleRevenues.reduce((sum, r) => sum + (Number(r.penalty) || 0), 0)
+            const airportSubsidy = vehicleRevenues.reduce((sum, r) => sum + (Number(r.airportSubsidy) || 0), 0)
+
+            const vehicleExpenses = monthExpenses
+                .filter(e => e.vehicleCode === driver.vehicleCode)
+                .reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+
+            const totalAmount = amount + airportSubsidy
+            const sharePercent = settings.sharesByVehicleType?.[driver.vehicleType] ?? settings.driverSharePercent ?? 60
+            const baseShare = (totalAmount * sharePercent) / 100
             const netSalary = baseShare + bonus - penalty
+            const vehicleProfit = totalAmount - netSalary - vehicleExpenses
 
             return {
                 id: driver.id,
@@ -64,11 +72,10 @@ export default function Reports() {
                 revenue: amount,
                 bonus,
                 penalty,
-                depositRequired: deposit?.requiredAmount || 0,
-                depositPaid: deposit?.paidAmount || 0,
-                depositMissing: (deposit?.requiredAmount || 0) - (deposit?.paidAmount || 0),
-                nightShifts,
+                airportSubsidy,
+                vehicleExpenses,
                 netSalary,
+                vehicleProfit,
             }
         }))
 
@@ -81,8 +88,8 @@ export default function Reports() {
     const totals = {
         revenue: data.reduce((s, d) => s + d.revenue, 0),
         netSalary: data.reduce((s, d) => s + d.netSalary, 0),
-        depositMissing: data.reduce((s, d) => s + Math.max(0, d.depositMissing), 0),
-        nightShifts: data.reduce((s, d) => s + d.nightShifts, 0),
+        vehicleExpenses: data.reduce((s, d) => s + d.vehicleExpenses, 0),
+        vehicleProfit: data.reduce((s, d) => s + d.vehicleProfit, 0),
     }
 
     const months = []
@@ -102,19 +109,29 @@ export default function Reports() {
         )
     }
 
+    const handlePrint = () => {
+        window.print()
+    }
+
     return (
-        <div className="animate-fade-in">
+        <div className="animate-fade-in print:bg-white print:p-0">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <div>
                     <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 flex items-center gap-3">
                         <FileText className="text-taxi-500" />Báo cáo tổng kết
                     </h1>
-                    <p className="text-gray-500 mt-1">Thống kê chi tiết theo tháng</p>
+                    <p className="text-gray-500 mt-1">Thống kê chi tiết {selectedMonth ? formatMonth(selectedMonth) : ''}</p>
                 </div>
+                <button
+                    onClick={handlePrint}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors print:hidden shadow-sm"
+                >
+                    <Printer size={18} /><span>In báo cáo</span>
+                </button>
             </div>
 
             {/* Month selector */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm mb-6">
+            <div className="bg-white rounded-2xl p-4 shadow-sm mb-6 print:hidden">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
                     <Calendar size={16} />Chọn tháng báo cáo
                 </label>
@@ -133,36 +150,37 @@ export default function Reports() {
                     <p className="text-sm text-gray-500">Tổng doanh thu</p>
                     <p className="text-xl font-bold text-gray-900">{formatCurrency(totals.revenue)}</p>
                 </div>
+                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                    <p className="text-sm text-blue-600">Tổng lợi nhuận xe</p>
+                    <p className="text-xl font-bold text-blue-700">{formatCurrency(totals.vehicleProfit)}</p>
+                </div>
                 <div className="bg-green-50 rounded-xl p-4 border border-green-100">
                     <p className="text-sm text-green-600">Tổng lương thực trả</p>
                     <p className="text-xl font-bold text-green-700">{formatCurrency(totals.netSalary)}</p>
                 </div>
                 <div className="bg-red-50 rounded-xl p-4 border border-red-100">
-                    <p className="text-sm text-red-600">Tiền cọc còn thiếu</p>
-                    <p className="text-xl font-bold text-red-700">{formatCurrency(totals.depositMissing)}</p>
-                </div>
-                <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
-                    <p className="text-sm text-indigo-600">Tổng ca trực đêm</p>
-                    <p className="text-xl font-bold text-indigo-700">{totals.nightShifts} ca</p>
+                    <p className="text-sm text-red-600">Tổng chi phí xe</p>
+                    <p className="text-xl font-bold text-red-700">{formatCurrency(totals.vehicleExpenses)}</p>
                 </div>
             </div>
 
             {/* Report table */}
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div className="p-4 border-b bg-gray-50">
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden print:shadow-none print:rounded-none">
+                <div className="p-4 border-b bg-gray-50 print:bg-transparent print:border-none print:px-0">
                     <h2 className="font-semibold text-gray-900">Chi tiết {selectedMonth ? formatMonth(selectedMonth) : ''}</h2>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-gray-50 border-b">
+                <div className="overflow-x-auto print:overflow-visible">
+                    <table className="w-full print:border print:border-gray-200">
+                        <thead className="bg-gray-50 border-b print:bg-gray-100">
                             <tr>
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Mã xe</th>
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Tài xế</th>
                                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Doanh thu</th>
                                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Thưởng/Phạt</th>
-                                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Cọc thiếu</th>
-                                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Ca trực</th>
+                                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Bù sân bay</th>
                                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Lương thực trả</th>
+                                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Chi phí xe</th>
+                                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Lợi nhuận xe</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -189,17 +207,20 @@ export default function Reports() {
                                         {!row.bonus && !row.penalty && <span className="text-gray-400">-</span>}
                                     </td>
                                     <td className="px-4 py-3 text-right">
-                                        {row.depositMissing > 0 ? (
-                                            <span className="text-red-600 font-medium">{formatCurrency(row.depositMissing)}</span>
-                                        ) : (
-                                            <span className="text-green-600">Đủ</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <span className="inline-flex items-center justify-center w-8 h-8 bg-indigo-100 text-indigo-700 rounded-full font-semibold text-sm">{row.nightShifts}</span>
+                                        {row.airportSubsidy > 0 ? <span className="text-orange-500 font-medium">+{formatCurrency(row.airportSubsidy)}</span> : <span className="text-gray-400">-</span>}
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <span className="font-bold text-lg text-taxi-600">{formatCurrency(row.netSalary)}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        {row.vehicleExpenses > 0 ? (
+                                            <span className="text-red-600 font-medium">-{formatCurrency(row.vehicleExpenses)}</span>
+                                        ) : (
+                                            <span className="text-gray-400">-</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        <span className="font-bold text-lg text-blue-600">{formatCurrency(row.vehicleProfit)}</span>
                                     </td>
                                 </tr>
                             ))}
@@ -209,9 +230,10 @@ export default function Reports() {
                                 <td className="px-4 py-3" colSpan={2}>TỔNG CỘNG</td>
                                 <td className="px-4 py-3 text-right">{formatCurrency(totals.revenue)}</td>
                                 <td className="px-4 py-3"></td>
-                                <td className="px-4 py-3 text-right text-red-600">{formatCurrency(totals.depositMissing)}</td>
-                                <td className="px-4 py-3 text-center text-indigo-600">{totals.nightShifts}</td>
+                                <td className="px-4 py-3"></td>
                                 <td className="px-4 py-3 text-right text-green-600">{formatCurrency(totals.netSalary)}</td>
+                                <td className="px-4 py-3 text-right text-red-600">{totals.vehicleExpenses > 0 ? `-${formatCurrency(totals.vehicleExpenses)}` : '-'}</td>
+                                <td className="px-4 py-3 text-right text-blue-600 text-xl">{formatCurrency(totals.vehicleProfit)}</td>
                             </tr>
                         </tfoot>
                     </table>

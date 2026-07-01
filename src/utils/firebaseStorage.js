@@ -14,13 +14,15 @@ import {
     orderBy
 } from 'firebase/firestore'
 
-// Collection names
 const COLLECTIONS = {
     DRIVERS: 'drivers',
     DEPOSITS: 'deposits',
     REVENUE: 'revenue',
     NIGHT_SHIFTS: 'nightShifts',
     SETTINGS: 'settings',
+    EXPENSES: 'expenses',
+    ADVANCES: 'advances',
+    PAYMENTS: 'payments',
 }
 
 // Default settings
@@ -150,6 +152,24 @@ export const depositStorage = {
             return null
         }
     },
+    updateRequiredAmount: async (driverId, newRequiredAmount) => {
+        try {
+            const deposit = await depositStorage.getByDriverId(driverId)
+            if (deposit) {
+                const status = deposit.paidAmount >= newRequiredAmount ? 'paid' : deposit.paidAmount > 0 ? 'partial' : 'unpaid'
+                const updates = {
+                    requiredAmount: newRequiredAmount,
+                    status,
+                }
+                await updateDoc(doc(db, COLLECTIONS.DEPOSITS, deposit.id), updates)
+                return { ...deposit, ...updates }
+            }
+            return null
+        } catch (error) {
+            console.error('Error updating deposit required amount:', error)
+            return null
+        }
+    },
     createForDriver: async (driver) => {
         try {
             const newDeposit = {
@@ -165,6 +185,34 @@ export const depositStorage = {
         } catch (error) {
             console.error('Error creating deposit:', error)
             return null
+        }
+    },
+    migrateLegacyDeposits: async () => {
+        try {
+            const depositsList = await depositStorage.getAll()
+            let migratedCount = 0
+            for (const deposit of depositsList) {
+                if (deposit.paidAmount > 0) {
+                    const paymentsRef = collection(db, COLLECTIONS.PAYMENTS)
+                    const q = query(paymentsRef, where('driverId', '==', deposit.driverId))
+                    const paymentsSnap = await getDocs(q)
+                    if (paymentsSnap.docs.length === 0) {
+                        const date = deposit.lastPaymentDate || new Date().toISOString().split('T')[0]
+                        await addDoc(paymentsRef, {
+                            driverId: deposit.driverId,
+                            driverName: deposit.driverName,
+                            amount: deposit.paidAmount,
+                            date: date,
+                            note: 'Khởi tạo từ dữ liệu cũ'
+                        })
+                        migratedCount++
+                    }
+                }
+            }
+            return migratedCount
+        } catch (error) {
+            console.error('Error migrating legacy deposits:', error)
+            throw error
         }
     },
 }
@@ -202,16 +250,16 @@ export const revenueStorage = {
     },
     add: async (revenue) => {
         try {
-            // Check if exists
+            // Check if exists (by specific date, not entire month)
             const q = query(
                 collection(db, COLLECTIONS.REVENUE),
                 where('vehicleCode', '==', revenue.vehicleCode),
-                where('month', '==', revenue.month)
+                where('date', '==', revenue.date)
             )
             const existing = await getDocs(q)
 
-            if (existing.docs.length > 0) {
-                // Update existing
+            if (existing.docs.length > 0 && revenue.date) {
+                // Update existing exact date match
                 const docRef = doc(db, COLLECTIONS.REVENUE, existing.docs[0].id)
                 await updateDoc(docRef, revenue)
                 return { id: existing.docs[0].id, ...revenue }
@@ -348,4 +396,209 @@ export const nightShiftStorage = {
         const shifts = await nightShiftStorage.getByMonth(month)
         return shifts.filter(s => s.driverId === driverId).length
     },
+}
+
+// Expense operations
+export const expenseStorage = {
+    getAll: async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, COLLECTIONS.EXPENSES))
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        } catch (error) {
+            console.error('Error getting expenses:', error)
+            return []
+        }
+    },
+    getByMonth: async (month) => {
+        try {
+            const allExpenses = await expenseStorage.getAll()
+            return allExpenses.filter(e => e.date && e.date.startsWith(month))
+        } catch (error) {
+            console.error('Error getting expenses by month:', error)
+            return []
+        }
+    },
+    add: async (expense) => {
+        try {
+            const docRef = await addDoc(collection(db, COLLECTIONS.EXPENSES), expense)
+            return { id: docRef.id, ...expense }
+        } catch (error) {
+            console.error('Error adding expense:', error)
+            return null
+        }
+    },
+    update: async (id, updates) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.EXPENSES, id)
+            await updateDoc(docRef, updates)
+            return { id, ...updates }
+        } catch (error) {
+            console.error('Error updating expense:', error)
+            return null
+        }
+    },
+    delete: async (id) => {
+        try {
+            await deleteDoc(doc(db, COLLECTIONS.EXPENSES, id))
+            return true
+        } catch (error) {
+            console.error('Error deleting expense:', error)
+            return false
+        }
+    },
+}
+
+// Advance operations
+export const advanceStorage = {
+    getAll: async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, COLLECTIONS.ADVANCES))
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        } catch (error) {
+            console.error('Error getting advances:', error)
+            return []
+        }
+    },
+    getByMonth: async (month) => {
+        try {
+            const allAdvances = await advanceStorage.getAll()
+            return allAdvances.filter(a => a.date && a.date.startsWith(month))
+        } catch (error) {
+            console.error('Error getting advances by month:', error)
+            return []
+        }
+    },
+    getByDriverId: async (driverId) => {
+        try {
+            const q = query(collection(db, COLLECTIONS.ADVANCES), where('driverId', '==', driverId))
+            const querySnapshot = await getDocs(q)
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        } catch (error) {
+            console.error('Error getting advances by driver:', error)
+            return []
+        }
+    },
+    add: async (advance) => {
+        try {
+            const newAdvance = { ...advance, status: advance.status || 'pending' }
+            const docRef = await addDoc(collection(db, COLLECTIONS.ADVANCES), newAdvance)
+            return { id: docRef.id, ...newAdvance }
+        } catch (error) {
+            console.error('Error adding advance:', error)
+            return null
+        }
+    },
+    update: async (id, updates) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.ADVANCES, id)
+            await updateDoc(docRef, updates)
+            return { id, ...updates }
+        } catch (error) {
+            console.error('Error updating advance:', error)
+            return null
+        }
+    },
+    delete: async (id) => {
+        try {
+            await deleteDoc(doc(db, COLLECTIONS.ADVANCES, id))
+            return true
+        } catch (error) {
+            console.error('Error deleting advance:', error)
+            return false
+        }
+    },
+}
+
+// Recalculate deposit paid amount based on payments on Firestore
+const recalculateDeposit = async (driverId) => {
+    try {
+        const paymentsSnapshot = await getDocs(
+            query(collection(db, COLLECTIONS.PAYMENTS), where('driverId', '==', driverId))
+        )
+        const payments = paymentsSnapshot.docs.map(doc => doc.data())
+        const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+
+        const deposit = await depositStorage.getByDriverId(driverId)
+        if (deposit) {
+            const status = totalPaid >= deposit.requiredAmount ? 'paid' : totalPaid > 0 ? 'partial' : 'unpaid'
+            let lastPaymentDate = deposit.lastPaymentDate
+            if (payments.length > 0) {
+                const dates = payments.map(p => p.date).filter(Boolean)
+                if (dates.length > 0) {
+                    lastPaymentDate = dates.sort().reverse()[0]
+                }
+            }
+            const updates = {
+                paidAmount: totalPaid,
+                status,
+                lastPaymentDate
+            }
+            await updateDoc(doc(db, COLLECTIONS.DEPOSITS, deposit.id), updates)
+            return { ...deposit, ...updates }
+        }
+        return null
+    } catch (error) {
+        console.error('Error recalculating deposit:', error)
+        return null
+    }
+}
+
+// Payment operations
+export const paymentStorage = {
+    getAll: async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, COLLECTIONS.PAYMENTS))
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        } catch (error) {
+            console.error('Error getting payments:', error)
+            return []
+        }
+    },
+    getByDriverId: async (driverId) => {
+        try {
+            const q = query(
+                collection(db, COLLECTIONS.PAYMENTS), 
+                where('driverId', '==', driverId),
+                orderBy('date', 'desc')
+            )
+            const querySnapshot = await getDocs(q)
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        } catch (e) {
+            try {
+                const q = query(collection(db, COLLECTIONS.PAYMENTS), where('driverId', '==', driverId))
+                const querySnapshot = await getDocs(q)
+                const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                return list.sort((a, b) => b.date.localeCompare(a.date))
+            } catch (error) {
+                console.error('Error getting payments by driver:', error)
+                return []
+            }
+        }
+    },
+    add: async (payment) => {
+        try {
+            const docRef = await addDoc(collection(db, COLLECTIONS.PAYMENTS), payment)
+            await recalculateDeposit(payment.driverId)
+            return { id: docRef.id, ...payment }
+        } catch (error) {
+            console.error('Error adding payment:', error)
+            return null
+        }
+    },
+    delete: async (id) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.PAYMENTS, id)
+            const docSnap = await getDoc(docRef)
+            if (docSnap.exists()) {
+                const payment = docSnap.data()
+                await deleteDoc(docRef)
+                await recalculateDeposit(payment.driverId)
+                return true
+            }
+            return false
+        } catch (error) {
+            console.error('Error deleting payment:', error)
+            return false
+        }
+    }
 }

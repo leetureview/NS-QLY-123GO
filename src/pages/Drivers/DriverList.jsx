@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Edit2, Trash2, Car, Loader2 } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Car, Loader2, Eye } from 'lucide-react'
 import { driverStorage } from '../../utils/firebaseStorage'
 
 export default function DriverList() {
@@ -93,8 +93,9 @@ export default function DriverList() {
                                     <td className="px-6 py-4 font-mono text-sm text-gray-600">{d.vehicleCode}</td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center justify-end gap-2">
-                                            <Link to={`/drivers/edit/${d.id}`} className="p-2 text-gray-500 hover:text-taxi-600 hover:bg-taxi-50 rounded-lg"><Edit2 size={18} /></Link>
-                                            <button onClick={() => setDeleteConfirm(d.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button>
+                                            <Link to={`/drivers/${d.id}`} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Xem chi tiết"><Eye size={18} /></Link>
+                                            <Link to={`/drivers/edit/${d.id}`} className="p-2 text-gray-500 hover:text-taxi-600 hover:bg-taxi-50 rounded-lg" title="Chỉnh sửa"><Edit2 size={18} /></Link>
+                                            <button onClick={() => setDeleteConfirm(d.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Xóa"><Trash2 size={18} /></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -119,6 +120,7 @@ export default function DriverList() {
                                 </div>
                             </div>
                             <div className="flex gap-1">
+                                <Link to={`/drivers/${d.id}`} className="p-2 text-gray-500 hover:text-blue-600 rounded-lg"><Eye size={18} /></Link>
                                 <Link to={`/drivers/edit/${d.id}`} className="p-2 text-gray-500 hover:text-taxi-600 rounded-lg"><Edit2 size={18} /></Link>
                                 <button onClick={() => setDeleteConfirm(d.id)} className="p-2 text-gray-500 hover:text-red-600 rounded-lg"><Trash2 size={18} /></button>
                             </div>
