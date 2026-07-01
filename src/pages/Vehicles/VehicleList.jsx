@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Edit2, Trash2, Car, Loader2, AlertTriangle, CheckCircle, RefreshCw, Users } from 'lucide-react'
-import { vehicleStorage, driverStorage, investorStorage } from '../../utils/firebaseStorage'
+import { Plus, Search, Edit2, Trash2, Car, Loader2, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react'
+import { vehicleStorage, driverStorage } from '../../utils/firebaseStorage'
 import { vehicleTypes } from '../../data/mockData'
 
 export default function VehicleList() {
     const [vehicles, setVehicles] = useState([])
     const [drivers, setDrivers] = useState([])
-    const [investors, setInvestors] = useState([])
     const [searchTerm, setSearchTerm] = useState('')
     const [deleteConfirm, setDeleteConfirm] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -21,12 +20,10 @@ export default function VehicleList() {
         setLoading(true)
         try {
             await vehicleStorage.deduplicateVehicles()
-            const [vData, dData, invData] = await Promise.all([
+            const [vData, dData] = await Promise.all([
                 vehicleStorage.getAll(),
-                driverStorage.getAll(),
-                investorStorage.getAll()
+                driverStorage.getAll()
             ])
-            setInvestors(invData)
             
             // If vehicles are empty, attempt auto-migration from drivers
             if (vData.length === 0 && dData.length > 0) {
@@ -189,7 +186,6 @@ export default function VehicleList() {
                                 <th className="px-6 py-4">Mã xe</th>
                                 <th className="px-6 py-4">Biển kiểm soát</th>
                                 <th className="px-6 py-4">Dòng xe</th>
-                                <th className="px-6 py-4">Sở hữu</th>
                                 <th className="px-6 py-4">Tài xế nhận xe</th>
                                 <th className="px-6 py-4">Hạn đăng kiểm</th>
                                 <th className="px-6 py-4">Hạn giấy đi đường</th>
@@ -200,7 +196,6 @@ export default function VehicleList() {
                         <tbody className="divide-y divide-gray-100">
                             {filteredVehicles.map(v => {
                                 const driver = getAssignedDriver(v.vehicleCode)
-                                const investor = investors.find(i => i.id === v.investorId)
                                 return (
                                     <tr key={v.id} className="hover:bg-gray-50/50 transition-colors text-sm">
                                         <td className="px-6 py-4 font-bold text-taxi-600 flex items-center">
@@ -213,15 +208,6 @@ export default function VehicleList() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 font-medium text-gray-700">{v.vehicleType}</td>
-                                        <td className="px-6 py-4">
-                                            {investor ? (
-                                                <span className="font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-2.5 py-1 rounded-lg text-xs">
-                                                    {investor.name}
-                                                </span>
-                                            ) : (
-                                                <span className="text-gray-400 text-xs">Công ty</span>
-                                            )}
-                                        </td>
                                         <td className="px-6 py-4">
                                             {driver ? (
                                                 <Link to={`/drivers/${driver.id}`} className="text-gray-900 font-medium hover:text-taxi-600 hover:underline">
