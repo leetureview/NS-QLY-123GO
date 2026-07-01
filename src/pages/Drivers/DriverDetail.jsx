@@ -223,7 +223,7 @@ export default function DriverDetail() {
                         <div className="space-y-4">
                             <div className="flex justify-between items-center py-2 border-b border-gray-50">
                                 <span className="text-gray-500 text-sm">Loại xe</span>
-                                <span className="font-medium text-gray-800">{driver.vehicleType || 'Chưa xác định'}</span>
+                                <span className="font-medium text-gray-800">{vehicle ? vehicle.vehicleType : (driver.vehicleType || 'Chưa xác định')}</span>
                             </div>
                             <div className="flex justify-between items-center py-2 border-b border-gray-50">
                                 <span className="text-gray-500 text-sm">Mã số xe</span>
@@ -232,7 +232,7 @@ export default function DriverDetail() {
                             <div className="flex justify-between items-center py-2 border-b border-gray-50">
                                 <span className="text-gray-500 text-sm">Biển kiểm soát</span>
                                 <span className="font-mono font-medium text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-100 font-semibold">
-                                    {driver.licensePlate}
+                                    {vehicle ? vehicle.licensePlate : driver.licensePlate}
                                 </span>
                             </div>
                             {/* Hạn đăng kiểm */}

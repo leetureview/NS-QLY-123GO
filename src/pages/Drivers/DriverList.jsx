@@ -69,6 +69,14 @@ export default function DriverList() {
         return null
     }
 
+    const getDriverVehicle = (d) => {
+        const vehicle = vehicles.find(v => v.vehicleCode?.toUpperCase() === d.vehicleCode?.toUpperCase())
+        return {
+            licensePlate: vehicle ? vehicle.licensePlate : d.licensePlate,
+            vehicleType: vehicle ? vehicle.vehicleType : (d.vehicleType || 'Chưa xác định')
+        }
+    }
+
     const filteredDrivers = drivers.filter(d =>
         d.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         d.licensePlate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -130,10 +138,10 @@ export default function DriverList() {
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg font-mono text-sm">
-                                            <Car size={14} />{d.licensePlate}
+                                            <Car size={14} />{getDriverVehicle(d).licensePlate}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-gray-600">{d.vehicleType}</td>
+                                    <td className="px-6 py-4 text-gray-600">{getDriverVehicle(d).vehicleType}</td>
                                     <td className="px-6 py-4 font-mono text-sm text-gray-600">{d.vehicleCode}</td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center justify-end gap-2">
@@ -161,10 +169,10 @@ export default function DriverList() {
                                      {d.name}
                                      {getDriverExpiryAlert(d)}
                                  </h3>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-mono">{d.licensePlate}</span>
-                                    <span className="text-xs text-gray-500">{d.vehicleCode}</span>
-                                </div>
+                                 <div className="flex items-center gap-2 mt-1">
+                                     <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-mono">{getDriverVehicle(d).licensePlate}</span>
+                                     <span className="text-xs text-gray-500">{d.vehicleCode}</span>
+                                 </div>
                             </div>
                             <div className="flex gap-1">
                                 <Link to={`/drivers/${d.id}`} className="p-2 text-gray-500 hover:text-blue-600 rounded-lg"><Eye size={18} /></Link>
