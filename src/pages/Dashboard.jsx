@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Users, TrendingUp, Wallet, Car, Plus, ArrowUpRight, ArrowDownRight, Loader2, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Users, TrendingUp, Wallet, Car, Plus, ArrowUpRight, ArrowDownRight, Loader2, AlertTriangle, CheckCircle, Award, Trophy, Crown } from 'lucide-react'
 import { driverStorage, depositStorage, revenueStorage, expenseStorage, advanceStorage, vehicleStorage } from '../utils/firebaseStorage'
 
 export default function Dashboard() {
@@ -16,6 +16,9 @@ export default function Dashboard() {
     const [chartData, setChartData] = useState([])
     const [depositRate, setDepositRate] = useState({ percent: 0, paid: 0, required: 0 })
     const [expiryAlerts, setExpiryAlerts] = useState([])
+    const [leaderboard, setLeaderboard] = useState([])
+    const [performanceList, setPerformanceList] = useState([])
+    const [fleetAverage, setFleetAverage] = useState(0)
 
     useEffect(() => {
         loadData()
@@ -116,6 +119,65 @@ export default function Dashboard() {
 
             alerts.sort((a, b) => a.daysLeft - b.daysLeft)
             setExpiryAlerts(alerts.slice(0, 5))
+
+            // Calculate Driver Performance & Leaderboard
+            const currentMonthRevenues = revenues.filter(r => r.month === currentMonth)
+
+            // Group by driverName
+            const driverRevenueMap = {}
+            currentMonthRevenues.forEach(r => {
+                const name = r.driverName || 'Không rõ'
+                if (!driverRevenueMap[name]) {
+                    driverRevenueMap[name] = {
+                        driverName: name,
+                        totalRevenue: 0,
+                        uniqueDays: new Set()
+                    }
+                }
+                driverRevenueMap[name].totalRevenue += Number(r.amount) || 0
+                if (r.date) {
+                    driverRevenueMap[name].uniqueDays.add(r.date)
+                }
+            })
+
+            // Map to driver stats array
+            const driverStats = Object.values(driverRevenueMap).map(d => {
+                const days = d.uniqueDays.size
+                return {
+                    driverName: d.driverName,
+                    totalRevenue: d.totalRevenue,
+                    activeDays: days,
+                    avgPerDay: days > 0 ? Math.round(d.totalRevenue / days) : 0
+                }
+            })
+
+            // Calculate Fleet Stats
+            const totalFleetRevenue = driverStats.reduce((sum, d) => sum + d.totalRevenue, 0)
+            const totalFleetActiveDays = driverStats.reduce((sum, d) => sum + d.activeDays, 0)
+            const calculatedFleetAverage = totalFleetActiveDays > 0 ? Math.round(totalFleetRevenue / totalFleetActiveDays) : 0
+            setFleetAverage(calculatedFleetAverage)
+
+            // Calculate Performance Diff %
+            const performanceWithDiff = driverStats.map(d => {
+                const diff = calculatedFleetAverage > 0 ? ((d.avgPerDay - calculatedFleetAverage) / calculatedFleetAverage) * 100 : 0
+                const matchedDriver = drivers.find(drv => drv.name?.toUpperCase() === d.driverName.toUpperCase())
+                return {
+                    ...d,
+                    performanceDiff: Math.round(diff * 10) / 10,
+                    driverId: matchedDriver ? matchedDriver.id : null,
+                    avatar: matchedDriver ? matchedDriver.avatar : null
+                }
+            })
+
+            // Leaderboard: Top 3 by total revenue
+            const sortedLeaderboard = [...performanceWithDiff]
+                .sort((a, b) => b.totalRevenue - a.totalRevenue)
+                .slice(0, 3)
+            setLeaderboard(sortedLeaderboard)
+
+            // Performance list: sort by average revenue per day descending
+            const sortedPerformance = [...performanceWithDiff].sort((a, b) => b.avgPerDay - a.avgPerDay)
+            setPerformanceList(sortedPerformance)
         } catch (error) {
             console.error('Error loading dashboard data:', error)
         }
@@ -456,6 +518,136 @@ export default function Dashboard() {
                                 <p className="text-xs mt-1">Không có xe nào quá hạn hoặc sắp hết hạn</p>
                             </div>
                         )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Bảng vinh danh & Phân tích hiệu suất */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                {/* Phân tích hiệu suất tài xế (Colspan 2) */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm lg:col-span-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                <TrendingUp className="text-blue-500" size={20} />
+                                Phân tích hiệu suất tài xế trong tháng
+                            </h2>
+                            <p className="text-xs text-gray-400 mt-0.5">So sánh doanh thu TB/ngày của từng tài xế với TB cả đội</p>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2 text-right">
+                            <span className="text-[10px] text-blue-500 font-bold uppercase tracking-wider block">TB Cả Đội Xe</span>
+                            <span className="text-sm font-extrabold text-blue-700">{formatCurrency(fleetAverage)}/ngày</span>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase border-b border-gray-100">
+                                <tr>
+                                    <th className="px-4 py-3">Tài xế</th>
+                                    <th className="px-4 py-3 text-right">Doanh thu tháng</th>
+                                    <th className="px-4 py-3 text-center">Số ngày chạy</th>
+                                    <th className="px-4 py-3 text-right">TB / ngày</th>
+                                    <th className="px-4 py-3 text-right">Hiệu suất</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {performanceList.map((perf, index) => {
+                                    const isAboveFleet = perf.performanceDiff >= 0
+                                    return (
+                                        <tr key={index} className="hover:bg-gray-50/50 transition-colors">
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    {perf.avatar ? (
+                                                        <img src={perf.avatar} alt={perf.driverName} className="w-8 h-8 rounded-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-8 h-8 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center font-semibold text-xs">
+                                                            {perf.driverName?.charAt(0)}
+                                                        </div>
+                                                    )}
+                                                    {perf.driverId ? (
+                                                        <Link to={`/drivers/${perf.driverId}`} className="font-medium text-gray-900 hover:text-taxi-600 hover:underline">
+                                                            {perf.driverName}
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="font-medium text-gray-900">{perf.driverName}</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-medium text-gray-700">
+                                                {formatCurrency(perf.totalRevenue)}
+                                            </td>
+                                            <td className="px-4 py-3 text-center font-medium text-gray-500">
+                                                {perf.activeDays} ngày
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-semibold text-gray-800">
+                                                {formatCurrency(perf.avgPerDay)}
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${isAboveFleet ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                                                    {isAboveFleet ? '+' : ''}{perf.performanceDiff}%
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                                {performanceList.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="text-center py-8 text-gray-400">
+                                            Chưa có dữ liệu hiệu suất của tháng này
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* Bảng vinh danh Top 3 (Colspan 1) */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                            <Award className="text-amber-500" size={22} />
+                            Vinh danh Doanh thu Tháng
+                        </h2>
+
+                        <div className="space-y-4">
+                            {leaderboard.map((item, index) => {
+                                const rankColors = [
+                                    { bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700', badge: 'bg-amber-500 text-white', icon: Crown, iconColor: 'text-amber-500' },
+                                    { bg: 'bg-slate-50 border-slate-200', text: 'text-slate-700', badge: 'bg-slate-400 text-white', icon: Trophy, iconColor: 'text-slate-400' },
+                                    { bg: 'bg-orange-50 border-orange-200', text: 'text-orange-700', badge: 'bg-orange-600/70 text-white', icon: Trophy, iconColor: 'text-orange-600/70' }
+                                ]
+                                const cfg = rankColors[index] || rankColors[2]
+                                const RankIcon = cfg.icon
+
+                                return (
+                                    <div key={index} className={`flex items-center gap-3 p-3.5 rounded-2xl border ${cfg.bg} transition-all duration-300 hover:-translate-y-0.5`}>
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.badge} font-bold text-sm shadow-sm`}>
+                                            {index + 1}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`font-extrabold text-sm ${cfg.text} truncate`}>{item.driverName}</span>
+                                                <RankIcon size={14} className={cfg.iconColor} />
+                                            </div>
+                                            <p className="text-xs text-gray-500 font-semibold mt-0.5">{formatCurrency(item.totalRevenue)}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Số ca</span>
+                                            <span className="text-xs font-bold text-gray-700">{item.activeDays} ca chạy</span>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                            {leaderboard.length === 0 && (
+                                <div className="text-center py-12 text-gray-400 flex flex-col items-center">
+                                    <Trophy size={40} className="text-gray-300 mb-2" />
+                                    <p className="text-sm font-medium">Chưa có bảng vinh danh</p>
+                                    <p className="text-xs mt-1">Hãy nhập doanh thu tháng này để hiển thị xếp hạng.</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
