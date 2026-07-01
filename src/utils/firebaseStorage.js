@@ -638,12 +638,14 @@ export const vehicleStorage = {
     },
     create: async (vehicleData) => {
         try {
-            const existing = await vehicleStorage.getByVehicleCode(vehicleData.vehicleCode)
-            if (existing) {
+            const code = vehicleData.vehicleCode.toUpperCase()
+            const docRef = doc(db, COLLECTIONS.VEHICLES, code)
+            const docSnap = await getDoc(docRef)
+            if (docSnap.exists()) {
                 throw new Error('Mã xe đã tồn tại trên hệ thống!')
             }
-            const docRef = await addDoc(collection(db, COLLECTIONS.VEHICLES), vehicleData)
-            return { id: docRef.id, ...vehicleData }
+            await setDoc(docRef, vehicleData)
+            return { id: code, ...vehicleData }
         } catch (error) {
             console.error('Error creating vehicle:', error)
             throw error
@@ -669,24 +671,49 @@ export const vehicleStorage = {
             return false
         }
     },
+    deduplicateVehicles: async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, COLLECTIONS.VEHICLES))
+            const allVehicles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+            const seen = new Set()
+            let deletedCount = 0
+            for (const vehicle of allVehicles) {
+                const code = vehicle.vehicleCode?.toUpperCase()
+                if (!code) continue
+                if (seen.has(code)) {
+                    await deleteDoc(doc(db, COLLECTIONS.VEHICLES, vehicle.id))
+                    deletedCount++
+                } else {
+                    seen.add(code)
+                }
+            }
+            return deletedCount
+        } catch (error) {
+            console.error('Error deduplicating vehicles:', error)
+            throw error
+        }
+    },
     migrateFromDrivers: async () => {
         try {
+            await vehicleStorage.deduplicateVehicles()
             const driversList = await driverStorage.getAll()
             const existingVehicles = await vehicleStorage.getAll()
             const existingCodes = new Set(existingVehicles.map(v => v.vehicleCode.toUpperCase()))
             let migratedCount = 0
             for (const driver of driversList) {
                 if (driver.vehicleCode && !existingCodes.has(driver.vehicleCode.toUpperCase())) {
+                    const code = driver.vehicleCode.toUpperCase()
                     const vehicleData = {
-                        vehicleCode: driver.vehicleCode.toUpperCase(),
+                        vehicleCode: code,
                         licensePlate: driver.licensePlate || '',
                         vehicleType: driver.vehicleType || '',
                         registryExpiry: driver.registryExpiry || '',
                         roadPermitExpiry: driver.roadPermitExpiry || '',
                         status: 'active'
                     }
-                    await addDoc(collection(db, COLLECTIONS.VEHICLES), vehicleData)
-                    existingCodes.add(driver.vehicleCode.toUpperCase())
+                    const docRef = doc(db, COLLECTIONS.VEHICLES, code)
+                    await setDoc(docRef, vehicleData)
+                    existingCodes.add(code)
                     migratedCount++
                 }
             }

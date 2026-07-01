@@ -19,6 +19,7 @@ export default function VehicleList() {
     const loadData = async () => {
         setLoading(true)
         try {
+            await vehicleStorage.deduplicateVehicles()
             const [vData, dData] = await Promise.all([
                 vehicleStorage.getAll(),
                 driverStorage.getAll()
