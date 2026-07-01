@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Search, Edit2, Trash2, Car, Loader2, Eye } from 'lucide-react'
-import { driverStorage } from '../../utils/firebaseStorage'
+import { driverStorage, vehicleStorage } from '../../utils/firebaseStorage'
 
 export default function DriverList() {
     const [drivers, setDrivers] = useState([])
+    const [vehicles, setVehicles] = useState([])
     const [searchTerm, setSearchTerm] = useState('')
     const [deleteConfirm, setDeleteConfirm] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -15,8 +16,16 @@ export default function DriverList() {
 
     const loadDrivers = async () => {
         setLoading(true)
-        const data = await driverStorage.getAll()
-        setDrivers(data)
+        try {
+            const [dData, vData] = await Promise.all([
+                driverStorage.getAll(),
+                vehicleStorage.getAll()
+            ])
+            setDrivers(dData)
+            setVehicles(vData)
+        } catch (error) {
+            console.error('Error loading drivers data:', error)
+        }
         setLoading(false)
     }
 
@@ -32,6 +41,9 @@ export default function DriverList() {
         let hasExpired = false
         let hasExpiringSoon = false
 
+        const vehicle = vehicles.find(v => v.vehicleCode?.toUpperCase() === d.vehicleCode?.toUpperCase())
+        if (!vehicle) return null
+
         const checkExpiry = (dateStr) => {
             if (!dateStr) return
             const expiry = new Date(dateStr)
@@ -41,17 +53,17 @@ export default function DriverList() {
             else if (diffDays <= 30) hasExpiringSoon = true
         }
 
-        checkExpiry(d.registryExpiry)
-        checkExpiry(d.roadPermitExpiry)
+        checkExpiry(vehicle.registryExpiry)
+        checkExpiry(vehicle.roadPermitExpiry)
 
         if (hasExpired) {
             return (
-                <span className="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse ml-2" title="Có giấy tờ xe ĐÃ HẾT HẠN!" />
+                <span className="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse ml-2" title="Giấy tờ xe giao cho tài xế ĐÃ HẾT HẠN!" />
             )
         }
         if (hasExpiringSoon) {
             return (
-                <span className="w-2.5 h-2.5 bg-amber-500 rounded-full inline-block ml-2" title="Có giấy tờ xe SẮP HẾT HẠN (< 30 ngày)" />
+                <span className="w-2.5 h-2.5 bg-amber-500 rounded-full inline-block ml-2" title="Giấy tờ xe giao cho tài xế SẮP HẾT HẠN (< 30 ngày)" />
             )
         }
         return null

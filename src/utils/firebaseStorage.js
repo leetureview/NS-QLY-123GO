@@ -23,6 +23,7 @@ const COLLECTIONS = {
     EXPENSES: 'expenses',
     ADVANCES: 'advances',
     PAYMENTS: 'payments',
+    VEHICLES: 'vehicles',
 }
 
 // Default settings
@@ -602,3 +603,98 @@ export const paymentStorage = {
         }
     }
 }
+
+export const vehicleStorage = {
+    getAll: async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, COLLECTIONS.VEHICLES))
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        } catch (error) {
+            console.error('Error getting vehicles:', error)
+            return []
+        }
+    },
+    getById: async (id) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.VEHICLES, id)
+            const docSnap = await getDoc(docRef)
+            return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null
+        } catch (error) {
+            console.error('Error getting vehicle:', error)
+            return null
+        }
+    },
+    getByVehicleCode: async (code) => {
+        try {
+            const q = query(collection(db, COLLECTIONS.VEHICLES), where('vehicleCode', '==', code))
+            const querySnapshot = await getDocs(q)
+            return querySnapshot.docs.length > 0
+                ? { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() }
+                : null
+        } catch (error) {
+            console.error('Error getting vehicle by code:', error)
+            return null
+        }
+    },
+    create: async (vehicleData) => {
+        try {
+            const existing = await vehicleStorage.getByVehicleCode(vehicleData.vehicleCode)
+            if (existing) {
+                throw new Error('Mã xe đã tồn tại trên hệ thống!')
+            }
+            const docRef = await addDoc(collection(db, COLLECTIONS.VEHICLES), vehicleData)
+            return { id: docRef.id, ...vehicleData }
+        } catch (error) {
+            console.error('Error creating vehicle:', error)
+            throw error
+        }
+    },
+    update: async (id, vehicleData) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.VEHICLES, id)
+            await updateDoc(docRef, vehicleData)
+            return { id, ...vehicleData }
+        } catch (error) {
+            console.error('Error updating vehicle:', error)
+            throw error
+        }
+    },
+    delete: async (id) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.VEHICLES, id)
+            await deleteDoc(docRef)
+            return true
+        } catch (error) {
+            console.error('Error deleting vehicle:', error)
+            return false
+        }
+    },
+    migrateFromDrivers: async () => {
+        try {
+            const driversList = await driverStorage.getAll()
+            const existingVehicles = await vehicleStorage.getAll()
+            const existingCodes = new Set(existingVehicles.map(v => v.vehicleCode.toUpperCase()))
+            let migratedCount = 0
+            for (const driver of driversList) {
+                if (driver.vehicleCode && !existingCodes.has(driver.vehicleCode.toUpperCase())) {
+                    const vehicleData = {
+                        vehicleCode: driver.vehicleCode.toUpperCase(),
+                        licensePlate: driver.licensePlate || '',
+                        vehicleType: driver.vehicleType || '',
+                        registryExpiry: driver.registryExpiry || '',
+                        roadPermitExpiry: driver.roadPermitExpiry || '',
+                        status: 'active'
+                    }
+                    await addDoc(collection(db, COLLECTIONS.VEHICLES), vehicleData)
+                    existingCodes.add(driver.vehicleCode.toUpperCase())
+                    migratedCount++
+                }
+            }
+            return migratedCount
+        } catch (error) {
+            console.error('Error migrating vehicles from drivers:', error)
+            throw error
+        }
+    }
+}
+

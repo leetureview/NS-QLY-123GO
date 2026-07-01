@@ -5,6 +5,7 @@ import { useState } from 'react'
 const menuItems = [
     { path: '/', name: 'Dashboard', icon: LayoutDashboard },
     { path: '/drivers', name: 'Quản lý tài xế', icon: Users },
+    { path: '/vehicles', name: 'Quản lý xe', icon: Car },
     { path: '/night-shift', name: 'Lịch trực đêm', icon: Moon },
     { path: '/finance', name: 'Tiền thế chân', icon: Wallet },
     { path: '/revenue', name: 'Quản lý doanh thu', icon: TrendingUp },

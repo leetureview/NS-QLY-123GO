@@ -14,6 +14,8 @@ import ExpenseList from './pages/Finance/ExpenseList'
 import ExpenseForm from './pages/Finance/ExpenseForm'
 import AdvanceList from './pages/Finance/AdvanceList'
 import AdvanceForm from './pages/Finance/AdvanceForm'
+import VehicleList from './pages/Vehicles/VehicleList'
+import VehicleForm from './pages/Vehicles/VehicleForm'
 
 function App() {
     return (
@@ -25,6 +27,9 @@ function App() {
                     <Route path="/drivers/new" element={<DriverForm />} />
                     <Route path="/drivers/edit/:id" element={<DriverForm />} />
                     <Route path="/drivers/:id" element={<DriverDetail />} />
+                    <Route path="/vehicles" element={<VehicleList />} />
+                    <Route path="/vehicles/new" element={<VehicleForm />} />
+                    <Route path="/vehicles/edit/:id" element={<VehicleForm />} />
                     <Route path="/finance" element={<DepositList />} />
                     <Route path="/revenue" element={<RevenueList />} />
                     <Route path="/revenue/new" element={<RevenueForm />} />
@@ -37,7 +42,6 @@ function App() {
                     <Route path="/advances/edit/:id" element={<AdvanceForm />} />
                     <Route path="/reports" element={<Reports />} />
                     <Route path="/settings" element={<Settings />} />
-
                 </Routes>
             </MainLayout>
         </Router>

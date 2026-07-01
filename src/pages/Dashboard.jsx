@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Users, TrendingUp, Wallet, Car, Plus, ArrowUpRight, ArrowDownRight, Loader2, AlertTriangle, CheckCircle } from 'lucide-react'
-import { driverStorage, depositStorage, revenueStorage, expenseStorage, advanceStorage } from '../utils/firebaseStorage'
+import { driverStorage, depositStorage, revenueStorage, expenseStorage, advanceStorage, vehicleStorage } from '../utils/firebaseStorage'
 
 export default function Dashboard() {
     const [stats, setStats] = useState({
@@ -24,12 +24,13 @@ export default function Dashboard() {
     const loadData = async () => {
         setLoading(true)
         try {
-            const [drivers, deposits, revenues, expenses, advances] = await Promise.all([
+            const [drivers, deposits, revenues, expenses, advances, vehiclesList] = await Promise.all([
                 driverStorage.getAll(),
                 depositStorage.getAll(),
                 revenueStorage.getAll(),
                 expenseStorage.getAll(),
-                advanceStorage.getAll()
+                advanceStorage.getAll(),
+                vehicleStorage.getAll()
             ])
 
             const currentMonth = new Date().toISOString().slice(0, 7)
@@ -82,12 +83,16 @@ export default function Dashboard() {
             const percent = totalReq > 0 ? Math.round((totalPaid / totalReq) * 100) : 0
             setDepositRate({ percent, paid: totalPaid, required: totalReq })
 
-            // Calculate document expiry alerts
+            // Calculate document expiry alerts from vehicles collection
             const alerts = []
             const today = new Date()
             today.setHours(0, 0, 0, 0)
 
-            drivers.forEach(d => {
+            vehiclesList.forEach(v => {
+                const driver = drivers.find(d => d.vehicleCode?.toUpperCase() === v.vehicleCode?.toUpperCase())
+                const driverName = driver ? driver.name : 'Chưa giao xe'
+                const driverId = driver ? driver.id : ''
+
                 const checkDocument = (dateStr, docName) => {
                     if (!dateStr) return
                     const expiry = new Date(dateStr)
@@ -95,18 +100,18 @@ export default function Dashboard() {
                     const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24))
                     if (diffDays <= 30) {
                         alerts.push({
-                            driverId: d.id,
-                            driverName: d.name,
-                            vehicleCode: d.vehicleCode,
-                            licensePlate: d.licensePlate,
+                            driverId: driverId,
+                            driverName: driverName,
+                            vehicleCode: v.vehicleCode,
+                            licensePlate: v.licensePlate,
                             docName: docName,
                             expiryDate: dateStr,
                             daysLeft: diffDays
                         })
                     }
                 }
-                checkDocument(d.registryExpiry, 'Đăng kiểm')
-                checkDocument(d.roadPermitExpiry, 'Giấy đi đường')
+                checkDocument(v.registryExpiry, 'Đăng kiểm')
+                checkDocument(v.roadPermitExpiry, 'Giấy đi đường')
             })
 
             alerts.sort((a, b) => a.daysLeft - b.daysLeft)
@@ -427,7 +432,7 @@ export default function Dashboard() {
                             return (
                                 <Link
                                     key={index}
-                                    to={`/drivers/${alert.driverId}`}
+                                    to={alert.driverId ? `/drivers/${alert.driverId}` : '/vehicles'}
                                     className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${isExpired ? 'bg-red-50/40 border-red-100 hover:bg-red-50/70' : 'bg-amber-50/40 border-amber-100 hover:bg-amber-50/70'}`}
                                 >
                                     <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${isExpired ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>

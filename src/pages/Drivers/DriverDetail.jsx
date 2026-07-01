@@ -15,13 +15,14 @@ import {
     AlertCircle,
     Loader2
 } from 'lucide-react'
-import { driverStorage, depositStorage, revenueStorage, paymentStorage } from '../../utils/firebaseStorage'
+import { driverStorage, depositStorage, revenueStorage, paymentStorage, vehicleStorage } from '../../utils/firebaseStorage'
 
 export default function DriverDetail() {
     const { id } = useParams()
     const navigate = useNavigate()
     
     const [driver, setDriver] = useState(null)
+    const [vehicle, setVehicle] = useState(null)
     const [deposit, setDeposit] = useState(null)
     const [payments, setPayments] = useState([])
     const [revenues, setRevenues] = useState([])
@@ -41,14 +42,16 @@ export default function DriverDetail() {
             }
             setDriver(foundDriver)
 
-            const [dep, paymentsList, driverRevenues] = await Promise.all([
+            const [dep, paymentsList, driverRevenues, matchedVehicle] = await Promise.all([
                 depositStorage.getByDriverId(id),
                 paymentStorage.getByDriverId(id),
-                revenueStorage.getByVehicleCode(foundDriver.vehicleCode)
+                revenueStorage.getByVehicleCode(foundDriver.vehicleCode),
+                vehicleStorage.getByVehicleCode(foundDriver.vehicleCode)
             ])
 
             setDeposit(dep)
             setPayments(paymentsList)
+            setVehicle(matchedVehicle)
 
             // Aggregate revenue by month
             const monthlyMap = {}
@@ -235,15 +238,15 @@ export default function DriverDetail() {
                             {/* Hạn đăng kiểm */}
                             <div className="flex flex-col gap-1 py-1 border-b border-gray-50">
                                 <span className="text-gray-500 text-sm">Hạn đăng kiểm</span>
-                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(driver.registryExpiry).classes}`}>
-                                    {getExpiryStatus(driver.registryExpiry).label}
+                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(vehicle?.registryExpiry).classes}`}>
+                                    {getExpiryStatus(vehicle?.registryExpiry).label}
                                 </span>
                             </div>
                             {/* Hạn giấy đi đường */}
                             <div className="flex flex-col gap-1 py-1">
                                 <span className="text-gray-500 text-sm">Hạn giấy đi đường</span>
-                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(driver.roadPermitExpiry).classes}`}>
-                                    {getExpiryStatus(driver.roadPermitExpiry).label}
+                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(vehicle?.roadPermitExpiry).classes}`}>
+                                    {getExpiryStatus(vehicle?.roadPermitExpiry).label}
                                 </span>
                             </div>
                         </div>

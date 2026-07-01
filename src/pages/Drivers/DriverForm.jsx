@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Save, User, Car, Hash, Camera, Loader2, Calendar } from 'lucide-react'
-import { driverStorage, depositStorage } from '../../utils/firebaseStorage'
+import { driverStorage, depositStorage, vehicleStorage } from '../../utils/firebaseStorage'
 import { vehicleTypes } from '../../data/mockData'
 
 export default function DriverForm() {
@@ -12,46 +12,59 @@ export default function DriverForm() {
     const [formData, setFormData] = useState({ 
         name: '', 
         licensePlate: '', 
-        vehicleType: vehicleTypes[0], 
+        vehicleType: '', 
         vehicleCode: '', 
         avatar: null,
         registryExpiry: '',
         roadPermitExpiry: ''
     })
+    const [vehicles, setVehicles] = useState([])
+    const [selectedVehicleId, setSelectedVehicleId] = useState('')
     const [errors, setErrors] = useState({})
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
 
     useEffect(() => {
-        if (isEditing) {
-            loadDriver()
-        }
-    }, [id, isEditing])
+        const initialize = async () => {
+            setLoading(true)
+            try {
+                const vList = await vehicleStorage.getAll()
+                setVehicles(vList)
 
-    const loadDriver = async () => {
-        setLoading(true)
-        const driver = await driverStorage.getById(id)
-        if (driver) {
-            setFormData({
-                name: driver.name,
-                licensePlate: driver.licensePlate,
-                vehicleType: driver.vehicleType,
-                vehicleCode: driver.vehicleCode,
-                avatar: driver.avatar || null,
-                registryExpiry: driver.registryExpiry || '',
-                roadPermitExpiry: driver.roadPermitExpiry || ''
-            })
-        } else {
-            navigate('/drivers')
+                if (isEditing) {
+                    const driver = await driverStorage.getById(id)
+                    if (driver) {
+                        setFormData({
+                            name: driver.name,
+                            licensePlate: driver.licensePlate || '',
+                            vehicleType: driver.vehicleType || '',
+                            vehicleCode: driver.vehicleCode || '',
+                            avatar: driver.avatar || null,
+                            registryExpiry: driver.registryExpiry || '',
+                            roadPermitExpiry: driver.roadPermitExpiry || ''
+                        })
+                        if (driver.vehicleCode) {
+                            const matched = vList.find(v => v.vehicleCode.toUpperCase() === driver.vehicleCode.toUpperCase())
+                            if (matched) {
+                                setSelectedVehicleId(matched.id)
+                            }
+                        }
+                    } else {
+                        navigate('/drivers')
+                    }
+                }
+            } catch (error) {
+                console.error('Error initializing form:', error)
+            }
+            setLoading(false)
         }
-        setLoading(false)
-    }
+        initialize()
+    }, [id, isEditing])
 
     const validate = () => {
         const newErrors = {}
         if (!formData.name.trim()) newErrors.name = 'Vui lòng nhập họ tên'
-        if (!formData.licensePlate.trim()) newErrors.licensePlate = 'Vui lòng nhập biển số xe'
-        if (!formData.vehicleCode.trim()) newErrors.vehicleCode = 'Vui lòng nhập mã số xe'
+        if (!selectedVehicleId) newErrors.vehicleId = 'Vui lòng chọn phương tiện giao cho tài xế'
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
     }
@@ -76,6 +89,35 @@ export default function DriverForm() {
             alert('Có lỗi xảy ra khi lưu dữ liệu!')
         }
         setSaving(false)
+    }
+
+    const handleVehicleChange = (e) => {
+        const vId = e.target.value
+        setSelectedVehicleId(vId)
+        if (errors.vehicleId) setErrors(prev => ({ ...prev, vehicleId: null }))
+        
+        if (!vId) {
+            setFormData(prev => ({
+                ...prev,
+                vehicleCode: '',
+                licensePlate: '',
+                vehicleType: '',
+                registryExpiry: '',
+                roadPermitExpiry: ''
+            }))
+        } else {
+            const vehicle = vehicles.find(v => v.id === vId)
+            if (vehicle) {
+                setFormData(prev => ({
+                    ...prev,
+                    vehicleCode: vehicle.vehicleCode,
+                    licensePlate: vehicle.licensePlate,
+                    vehicleType: vehicle.vehicleType,
+                    registryExpiry: vehicle.registryExpiry || '',
+                    roadPermitExpiry: vehicle.roadPermitExpiry || ''
+                }))
+            }
+        }
     }
 
     const handleChange = (field) => (e) => {
@@ -141,51 +183,52 @@ export default function DriverForm() {
                         {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
                     </div>
 
+                    {/* Chọn xe dropdown */}
                     <div>
-                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"><Car size={16} />Biển số xe</label>
-                        <input type="text" value={formData.licensePlate} onChange={handleChange('licensePlate')} placeholder="30A-12345" className={`w-full px-4 py-3 rounded-xl border ${errors.licensePlate ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none font-mono`} />
-                        {errors.licensePlate && <p className="text-red-500 text-sm mt-1">{errors.licensePlate}</p>}
-                    </div>
-
-                    <div>
-                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"><Car size={16} />Loại xe</label>
-                        <select value={formData.vehicleType} onChange={handleChange('vehicleType')} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none bg-white">
-                            {vehicleTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                            <Car size={16} className="text-taxi-500" />
+                            Giao phương tiện
+                        </label>
+                        <select 
+                            value={selectedVehicleId} 
+                            onChange={handleVehicleChange} 
+                            className={`w-full px-4 py-3 rounded-xl border ${errors.vehicleId ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none bg-white text-sm`}
+                        >
+                            <option value="">-- Chọn xe giao cho tài xế --</option>
+                            {vehicles.map(v => (
+                                <option key={v.id} value={v.id}>
+                                    {v.vehicleCode} ({v.licensePlate} - {v.vehicleType})
+                                </option>
+                            ))}
                         </select>
+                        {errors.vehicleId && <p className="text-red-500 text-xs mt-1">{errors.vehicleId}</p>}
                     </div>
 
-                    <div>
-                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"><Hash size={16} />Mã số xe</label>
-                        <input type="text" value={formData.vehicleCode} onChange={handleChange('vehicleCode')} placeholder="TX001" className={`w-full px-4 py-3 rounded-xl border ${errors.vehicleCode ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none font-mono uppercase`} />
-                        {errors.vehicleCode && <p className="text-red-500 text-sm mt-1">{errors.vehicleCode}</p>}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                                <Calendar size={16} className="text-purple-500" />
-                                Hạn đăng kiểm
-                            </label>
-                            <input 
-                                type="date" 
-                                value={formData.registryExpiry} 
-                                onChange={handleChange('registryExpiry')} 
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none text-sm" 
-                            />
+                    {/* Xem trước thông tin xe được chọn */}
+                    {selectedVehicleId && (
+                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 grid grid-cols-2 gap-4 text-xs">
+                            <div>
+                                <p className="text-gray-400">Biển kiểm soát</p>
+                                <p className="font-semibold text-gray-800 font-mono mt-0.5">{formData.licensePlate}</p>
+                            </div>
+                            <div>
+                                <p className="text-gray-400">Dòng xe</p>
+                                <p className="font-semibold text-gray-800 mt-0.5">{formData.vehicleType}</p>
+                            </div>
+                            <div>
+                                <p className="text-gray-400">Hạn đăng kiểm</p>
+                                <p className="font-semibold text-purple-600 mt-0.5">
+                                    {formData.registryExpiry ? new Date(formData.registryExpiry).toLocaleDateString('vi-VN') : 'Chưa cập nhật'}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-gray-400">Hạn giấy đi đường</p>
+                                <p className="font-semibold text-amber-600 mt-0.5">
+                                    {formData.roadPermitExpiry ? new Date(formData.roadPermitExpiry).toLocaleDateString('vi-VN') : 'Chưa cập nhật'}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                                <Calendar size={16} className="text-amber-500" />
-                                Hạn giấy đi đường
-                            </label>
-                            <input 
-                                type="date" 
-                                value={formData.roadPermitExpiry} 
-                                onChange={handleChange('roadPermitExpiry')} 
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none text-sm" 
-                            />
-                        </div>
-                    </div>
+                    )}
                 </div>
 
                 <div className="flex gap-3 mt-8">
