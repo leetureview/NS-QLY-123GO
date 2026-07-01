@@ -26,6 +26,37 @@ export default function DriverList() {
         setDeleteConfirm(null)
     }
 
+    const getDriverExpiryAlert = (d) => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        let hasExpired = false
+        let hasExpiringSoon = false
+
+        const checkExpiry = (dateStr) => {
+            if (!dateStr) return
+            const expiry = new Date(dateStr)
+            expiry.setHours(0, 0, 0, 0)
+            const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24))
+            if (diffDays < 0) hasExpired = true
+            else if (diffDays <= 30) hasExpiringSoon = true
+        }
+
+        checkExpiry(d.registryExpiry)
+        checkExpiry(d.roadPermitExpiry)
+
+        if (hasExpired) {
+            return (
+                <span className="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse ml-2" title="Có giấy tờ xe ĐÃ HẾT HẠN!" />
+            )
+        }
+        if (hasExpiringSoon) {
+            return (
+                <span className="w-2.5 h-2.5 bg-amber-500 rounded-full inline-block ml-2" title="Có giấy tờ xe SẮP HẾT HẠN (< 30 ngày)" />
+            )
+        }
+        return null
+    }
+
     const filteredDrivers = drivers.filter(d =>
         d.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         d.licensePlate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -82,6 +113,7 @@ export default function DriverList() {
                                                 <div className="w-10 h-10 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center font-semibold">{d.name?.charAt(0)}</div>
                                             )}
                                             <span className="font-medium text-gray-900">{d.name}</span>
+                                            {getDriverExpiryAlert(d)}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
@@ -113,7 +145,10 @@ export default function DriverList() {
                                 <div className="w-12 h-12 bg-taxi-100 text-taxi-600 rounded-full flex items-center justify-center font-semibold text-lg">{d.name?.charAt(0)}</div>
                             )}
                             <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-gray-900">{d.name}</h3>
+                                 <h3 className="font-semibold text-gray-900 flex items-center">
+                                     {d.name}
+                                     {getDriverExpiryAlert(d)}
+                                 </h3>
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-mono">{d.licensePlate}</span>
                                     <span className="text-xs text-gray-500">{d.vehicleCode}</span>

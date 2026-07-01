@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Save, User, Car, Hash, Camera, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, User, Car, Hash, Camera, Loader2, Calendar } from 'lucide-react'
 import { driverStorage, depositStorage } from '../../utils/firebaseStorage'
 import { vehicleTypes } from '../../data/mockData'
 
@@ -9,7 +9,15 @@ export default function DriverForm() {
     const navigate = useNavigate()
     const isEditing = Boolean(id)
 
-    const [formData, setFormData] = useState({ name: '', licensePlate: '', vehicleType: vehicleTypes[0], vehicleCode: '', avatar: null })
+    const [formData, setFormData] = useState({ 
+        name: '', 
+        licensePlate: '', 
+        vehicleType: vehicleTypes[0], 
+        vehicleCode: '', 
+        avatar: null,
+        registryExpiry: '',
+        roadPermitExpiry: ''
+    })
     const [errors, setErrors] = useState({})
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
@@ -29,7 +37,9 @@ export default function DriverForm() {
                 licensePlate: driver.licensePlate,
                 vehicleType: driver.vehicleType,
                 vehicleCode: driver.vehicleCode,
-                avatar: driver.avatar || null
+                avatar: driver.avatar || null,
+                registryExpiry: driver.registryExpiry || '',
+                roadPermitExpiry: driver.roadPermitExpiry || ''
             })
         } else {
             navigate('/drivers')
@@ -148,6 +158,33 @@ export default function DriverForm() {
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"><Hash size={16} />Mã số xe</label>
                         <input type="text" value={formData.vehicleCode} onChange={handleChange('vehicleCode')} placeholder="TX001" className={`w-full px-4 py-3 rounded-xl border ${errors.vehicleCode ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none font-mono uppercase`} />
                         {errors.vehicleCode && <p className="text-red-500 text-sm mt-1">{errors.vehicleCode}</p>}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                                <Calendar size={16} className="text-purple-500" />
+                                Hạn đăng kiểm
+                            </label>
+                            <input 
+                                type="date" 
+                                value={formData.registryExpiry} 
+                                onChange={handleChange('registryExpiry')} 
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none text-sm" 
+                            />
+                        </div>
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                                <Calendar size={16} className="text-amber-500" />
+                                Hạn giấy đi đường
+                            </label>
+                            <input 
+                                type="date" 
+                                value={formData.roadPermitExpiry} 
+                                onChange={handleChange('roadPermitExpiry')} 
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none text-sm" 
+                            />
+                        </div>
                     </div>
                 </div>
 

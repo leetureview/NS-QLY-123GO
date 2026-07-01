@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Users, TrendingUp, Wallet, Car, Plus, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react'
+import { Users, TrendingUp, Wallet, Car, Plus, ArrowUpRight, ArrowDownRight, Loader2, AlertTriangle, CheckCircle } from 'lucide-react'
 import { driverStorage, depositStorage, revenueStorage, expenseStorage, advanceStorage } from '../utils/firebaseStorage'
 
 export default function Dashboard() {
@@ -15,6 +15,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true)
     const [chartData, setChartData] = useState([])
     const [depositRate, setDepositRate] = useState({ percent: 0, paid: 0, required: 0 })
+    const [expiryAlerts, setExpiryAlerts] = useState([])
 
     useEffect(() => {
         loadData()
@@ -80,6 +81,36 @@ export default function Dashboard() {
             const totalPaid = deposits.reduce((sum, d) => sum + (Number(d.paidAmount) || 0), 0)
             const percent = totalReq > 0 ? Math.round((totalPaid / totalReq) * 100) : 0
             setDepositRate({ percent, paid: totalPaid, required: totalReq })
+
+            // Calculate document expiry alerts
+            const alerts = []
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+
+            drivers.forEach(d => {
+                const checkDocument = (dateStr, docName) => {
+                    if (!dateStr) return
+                    const expiry = new Date(dateStr)
+                    expiry.setHours(0, 0, 0, 0)
+                    const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24))
+                    if (diffDays <= 30) {
+                        alerts.push({
+                            driverId: d.id,
+                            driverName: d.name,
+                            vehicleCode: d.vehicleCode,
+                            licensePlate: d.licensePlate,
+                            docName: docName,
+                            expiryDate: dateStr,
+                            daysLeft: diffDays
+                        })
+                    }
+                }
+                checkDocument(d.registryExpiry, 'Đăng kiểm')
+                checkDocument(d.roadPermitExpiry, 'Giấy đi đường')
+            })
+
+            alerts.sort((a, b) => a.daysLeft - b.daysLeft)
+            setExpiryAlerts(alerts.slice(0, 5))
         } catch (error) {
             console.error('Error loading dashboard data:', error)
         }
@@ -324,29 +355,31 @@ export default function Dashboard() {
             </div>
 
             {/* Quick Actions & Recent Activity */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Quick Actions */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Thao tác nhanh</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Link
-                            to="/drivers/new"
-                            className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-taxi-500 to-taxi-600 text-white hover:from-taxi-600 hover:to-taxi-700 transition-all duration-300 group"
-                        >
-                            <div className="p-2 bg-white/20 rounded-lg group-hover:scale-110 transition-transform">
-                                <Plus size={20} />
-                            </div>
-                            <span className="font-medium">Thêm tài xế</span>
-                        </Link>
-                        <Link
-                            to="/revenue/new"
-                            className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-300 group"
-                        >
-                            <div className="p-2 bg-white/20 rounded-lg group-hover:scale-110 transition-transform">
-                                <TrendingUp size={20} />
-                            </div>
-                            <span className="font-medium">Nhập doanh thu</span>
-                        </Link>
+                <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Thao tác nhanh</h2>
+                        <div className="grid grid-cols-1 gap-3">
+                            <Link
+                                to="/drivers/new"
+                                className="flex items-center gap-3 p-3.5 rounded-xl bg-gradient-to-r from-taxi-500 to-taxi-600 text-white hover:from-taxi-600 hover:to-taxi-700 transition-all duration-300 group"
+                            >
+                                <div className="p-2 bg-white/20 rounded-lg group-hover:scale-110 transition-transform">
+                                    <Plus size={18} />
+                                </div>
+                                <span className="font-medium text-sm">Thêm tài xế mới</span>
+                            </Link>
+                            <Link
+                                to="/revenue/new"
+                                className="flex items-center gap-3 p-3.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-300 group"
+                            >
+                                <div className="p-2 bg-white/20 rounded-lg group-hover:scale-110 transition-transform">
+                                    <TrendingUp size={18} />
+                                </div>
+                                <span className="font-medium text-sm">Nhập doanh thu ca</span>
+                            </Link>
+                        </div>
                     </div>
                 </div>
 
@@ -371,11 +404,52 @@ export default function Dashboard() {
                                     <p className="font-medium text-gray-900 truncate">{driver.name}</p>
                                     <p className="text-sm text-gray-500">{driver.licensePlate}</p>
                                 </div>
-                                <span className="text-xs text-gray-400">{driver.vehicleCode}</span>
+                                <span className="text-xs text-gray-400 font-mono">{driver.vehicleCode}</span>
                             </div>
                         ))}
                         {recentDrivers.length === 0 && (
                             <p className="text-gray-500 text-center py-4">Chưa có tài xế nào</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Document Expiry Alerts */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-semibold text-gray-900">Hạn đăng kiểm & Giấy đi đường</h2>
+                        <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full animate-pulse">
+                            {expiryAlerts.length} cảnh báo
+                        </span>
+                    </div>
+                    <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
+                        {expiryAlerts.map((alert, index) => {
+                            const isExpired = alert.daysLeft < 0
+                            return (
+                                <Link
+                                    key={index}
+                                    to={`/drivers/${alert.driverId}`}
+                                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${isExpired ? 'bg-red-50/40 border-red-100 hover:bg-red-50/70' : 'bg-amber-50/40 border-amber-100 hover:bg-amber-50/70'}`}
+                                >
+                                    <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${isExpired ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                                        <AlertTriangle size={16} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-bold text-sm text-gray-800 truncate">{alert.vehicleCode} ({alert.driverName})</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Hạn <strong className={isExpired ? 'text-red-600' : 'text-amber-600'}>{alert.docName}</strong>: {isExpired ? `Đã quá hạn ${Math.abs(alert.daysLeft)} ngày` : `Sắp hết hạn (Còn ${alert.daysLeft} ngày)`}
+                                        </p>
+                                    </div>
+                                </Link>
+                            )
+                        })}
+                        {expiryAlerts.length === 0 && (
+                            <div className="flex flex-col items-center justify-center text-center py-8 text-gray-400">
+                                <CheckCircle size={32} className="text-emerald-500 mb-2" />
+                                <p className="text-sm font-medium text-gray-500">Giấy tờ xe an toàn</p>
+                                <p className="text-xs mt-1">Không có xe nào quá hạn hoặc sắp hết hạn</p>
+                            </div>
                         )}
                     </div>
                 </div>

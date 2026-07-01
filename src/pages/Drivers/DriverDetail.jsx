@@ -96,6 +96,34 @@ export default function DriverDetail() {
         return date.toLocaleDateString('vi-VN')
     }
 
+    const getExpiryStatus = (dateStr) => {
+        if (!dateStr) return { label: 'Chưa cập nhật', classes: 'text-gray-400 bg-gray-50' }
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const expiry = new Date(dateStr)
+        expiry.setHours(0, 0, 0, 0)
+        
+        const diffTime = expiry - today
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        
+        if (diffDays < 0) {
+            return { 
+                label: `Đã hết hạn (${Math.abs(diffDays)} ngày trước)`, 
+                classes: 'text-red-700 bg-red-50 border border-red-200 font-semibold' 
+            }
+        } else if (diffDays <= 30) {
+            return { 
+                label: `Sắp hết hạn (Còn ${diffDays} ngày)`, 
+                classes: 'text-amber-700 bg-amber-50 border border-amber-200 font-semibold' 
+            }
+        } else {
+            return { 
+                label: `Còn hạn (Hết hạn: ${formatDate(dateStr)})`, 
+                classes: 'text-emerald-700 bg-emerald-50 border border-emerald-200 font-medium' 
+            }
+        }
+    }
+
     // Calculate remaining deposit
     const requiredAmount = deposit?.requiredAmount || 0
     const paidAmount = deposit?.paidAmount || 0
@@ -198,10 +226,24 @@ export default function DriverDetail() {
                                 <span className="text-gray-500 text-sm">Mã số xe</span>
                                 <span className="font-semibold text-taxi-600">{driver.vehicleCode}</span>
                             </div>
-                            <div className="flex justify-between items-center py-2">
+                            <div className="flex justify-between items-center py-2 border-b border-gray-50">
                                 <span className="text-gray-500 text-sm">Biển kiểm soát</span>
-                                <span className="font-mono font-medium text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                <span className="font-mono font-medium text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-100 font-semibold">
                                     {driver.licensePlate}
+                                </span>
+                            </div>
+                            {/* Hạn đăng kiểm */}
+                            <div className="flex flex-col gap-1 py-1 border-b border-gray-50">
+                                <span className="text-gray-500 text-sm">Hạn đăng kiểm</span>
+                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(driver.registryExpiry).classes}`}>
+                                    {getExpiryStatus(driver.registryExpiry).label}
+                                </span>
+                            </div>
+                            {/* Hạn giấy đi đường */}
+                            <div className="flex flex-col gap-1 py-1">
+                                <span className="text-gray-500 text-sm">Hạn giấy đi đường</span>
+                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(driver.roadPermitExpiry).classes}`}>
+                                    {getExpiryStatus(driver.roadPermitExpiry).label}
                                 </span>
                             </div>
                         </div>
