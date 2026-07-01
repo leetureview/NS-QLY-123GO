@@ -14,9 +14,9 @@ export default function InvestorReport() {
     // Configurations
     const [dispatchFee, setDispatchFee] = useState(2000000) // Default 2,000,000 VND
     const [sharePercentages, setSharePercentages] = useState({
-        'VF5': 40,            // Driver 40%, Investor 60%
-        'Minio Green': 40,    // Driver 40%, Investor 60%
-        'VinFast Fadil': 40,  // Driver 40%, Investor 60%
+        'VF5': { driver: 40, company: 0 },
+        'Minio Green': { driver: 40, company: 0 },
+        'VinFast Fadil': { driver: 40, company: 0 },
     })
     
     // Calculated Report Results
@@ -61,8 +61,8 @@ export default function InvestorReport() {
             setSharePercentages(prev => {
                 const updated = { ...prev }
                 types.forEach(t => {
-                    if (updated[t] === undefined) {
-                        updated[t] = 40 // Default to 40% if not configured
+                    if (updated[t] === undefined || typeof updated[t] === 'number') {
+                        updated[t] = { driver: typeof updated[t] === 'number' ? updated[t] : 40, company: 0 }
                     }
                 })
                 return updated
@@ -123,8 +123,9 @@ export default function InvestorReport() {
             })
 
             const avgRevenue = totalVehiclesInDb > 0 ? totalRevenue / totalVehiclesInDb : 0
-            const driverPct = sharePercentages[type] !== undefined ? sharePercentages[type] : 40
-            const investorPct = 100 - driverPct
+            const driverPct = sharePercentages[type]?.driver !== undefined ? sharePercentages[type].driver : 40
+            const companyPct = sharePercentages[type]?.company !== undefined ? sharePercentages[type].company : 0
+            const investorPct = 100 - driverPct - companyPct
             const remainOne = (avgRevenue * investorPct) / 100
             const payoutOne = Math.max(0, remainOne - dispatchFee)
 
@@ -134,6 +135,7 @@ export default function InvestorReport() {
                 totalRevenue,
                 avgRevenue,
                 driverPct,
+                companyPct,
                 investorPct,
                 remainOne,
                 payoutOne
@@ -161,6 +163,8 @@ export default function InvestorReport() {
                         type,
                         count,
                         avgRevenue: typeStat?.avgRevenue || 0,
+                        driverPct: typeStat?.driverPct || 40,
+                        companyPct: typeStat?.companyPct || 0,
                         investorPct: typeStat?.investorPct || 60,
                         payoutOne: typeStat?.payoutOne || 0,
                         payoutForType
@@ -181,12 +185,26 @@ export default function InvestorReport() {
         setReportRows(rows)
     }
 
-    const handlePercentChange = (type, val) => {
+    const handlePercentChange = (type, field, val) => {
         const pct = Math.max(0, Math.min(100, Number(val) || 0))
-        setSharePercentages(prev => ({
-            ...prev,
-            [type]: pct
-        }))
+        setSharePercentages(prev => {
+            const current = prev[type] || { driver: 40, company: 0 }
+            const updated = {
+                ...current,
+                [field]: pct
+            }
+            if (updated.driver + updated.company > 100) {
+                if (field === 'driver') {
+                    updated.company = 100 - updated.driver
+                } else {
+                    updated.driver = 100 - updated.company
+                }
+            }
+            return {
+                ...prev,
+                [type]: updated
+            }
+        })
     }
 
     const formatCurrency = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)
@@ -222,32 +240,51 @@ export default function InvestorReport() {
                 <div>
                     <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <Settings size={16} className="text-taxi-500" />
-                        Cấu hình tỉ lệ chia tài xế (%) theo Dòng xe
+                        Cấu hình phân chia doanh thu (%) theo Dòng xe
                     </h3>
-                    <div className="space-y-3.5">
+                    <div className="space-y-4">
                         {uniqueVehicleTypes.length === 0 ? (
-                            <p className="text-xs text-gray-400 italic">Chưa có dòng xe góp vốn nào được gán cho nhà đầu tư.</p>
+                            <p className="text-xs text-gray-400 italic">Chưa có dòng xe góp vốn nào được khai báo.</p>
                         ) : (
-                            uniqueVehicleTypes.map(type => (
-                                <div key={type} className="flex items-center justify-between gap-4 text-sm">
-                                    <span className="font-semibold text-gray-700">{type}</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400">Tài xế nhận:</span>
-                                        <input 
-                                            type="number" 
-                                            value={sharePercentages[type] ?? 40}
-                                            onChange={(e) => handlePercentChange(type, e.target.value)}
-                                            className="w-16 px-2.5 py-1 rounded-lg border border-gray-200 focus:border-taxi-500 outline-none text-center font-bold text-sm bg-gray-50"
-                                            min="0"
-                                            max="100"
-                                        />
-                                        <span className="font-bold text-gray-500">%</span>
-                                        <span className="text-[10px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded font-semibold ml-2">
-                                            NĐT hưởng {100 - (sharePercentages[type] ?? 40)}%
-                                        </span>
+                            uniqueVehicleTypes.map(type => {
+                                const driver = sharePercentages[type]?.driver ?? 40
+                                const company = sharePercentages[type]?.company ?? 0
+                                const investor = 100 - driver - company
+                                return (
+                                    <div key={type} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm pb-3 border-b border-gray-50 last:border-0">
+                                        <span className="font-bold text-gray-700 min-w-[90px]">{type}</span>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-xs text-gray-400">Tài xế:</span>
+                                                <input 
+                                                    type="number" 
+                                                    value={driver}
+                                                    onChange={(e) => handlePercentChange(type, 'driver', e.target.value)}
+                                                    className="w-12 px-1.5 py-0.5 rounded border border-gray-200 focus:border-taxi-500 outline-none text-center font-bold text-xs bg-gray-50"
+                                                    min="0"
+                                                    max="100"
+                                                />
+                                                <span className="text-xs font-bold text-gray-500">%</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-xs text-gray-400">Công ty:</span>
+                                                <input 
+                                                    type="number" 
+                                                    value={company}
+                                                    onChange={(e) => handlePercentChange(type, 'company', e.target.value)}
+                                                    className="w-12 px-1.5 py-0.5 rounded border border-gray-200 focus:border-taxi-500 outline-none text-center font-bold text-xs bg-gray-50"
+                                                    min="0"
+                                                    max="100"
+                                                />
+                                                <span className="text-xs font-bold text-gray-500">%</span>
+                                            </div>
+                                            <span className="text-[10px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded font-bold">
+                                                NĐT: {investor}%
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                            ))
+                                )
+                            })
                         )}
                     </div>
                 </div>
@@ -399,7 +436,7 @@ export default function InvestorReport() {
                                         <th className="p-3">Dòng xe</th>
                                         <th className="p-3 text-center">Số xe góp</th>
                                         <th className="p-3 text-right">Doanh thu TB/xe</th>
-                                        <th className="p-3 text-right">Còn lại ({100 - (sharePercentages[reportRows[activeTab].breakdown[0]?.type] ?? 40)}%)</th>
+                                        <th className="p-3 text-right">NĐT hưởng (%)</th>
                                         <th className="p-3 text-right">Trừ tiền đài</th>
                                         <th className="p-3 text-right">Thành tiền</th>
                                     </tr>
@@ -410,7 +447,9 @@ export default function InvestorReport() {
                                             <td className="p-3 font-bold text-blue-800">{b.type}</td>
                                             <td className="p-3 text-center font-semibold text-gray-800">{b.count} xe</td>
                                             <td className="p-3 text-right font-medium text-gray-700">{formatCurrency(b.avgRevenue)}</td>
-                                            <td className="p-3 text-right font-semibold text-purple-700">{formatCurrency(b.avgRevenue * b.investorPct / 100)}</td>
+                                            <td className="p-3 text-right font-semibold text-purple-700">
+                                                {formatCurrency(b.avgRevenue * b.investorPct / 100)} ({b.investorPct}%)
+                                            </td>
                                             <td className="p-3 text-right text-red-600 font-semibold">-{formatCurrency(dispatchFee)}</td>
                                             <td className="p-3 text-right font-extrabold text-gray-900">{formatCurrency(b.payoutForType)}</td>
                                         </tr>
