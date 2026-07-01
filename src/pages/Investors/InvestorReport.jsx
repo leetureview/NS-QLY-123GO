@@ -45,8 +45,16 @@ export default function InvestorReport() {
             setVehicles(vList)
             setRevenues(revList)
             
-            // Extract unique vehicle types from existing vehicles list
-            const types = [...new Set(vList.map(v => v.vehicleType).filter(Boolean))]
+            // Extract unique vehicle types from both vehicles list and investor configured shares
+            const typesSet = new Set(vList.map(v => v.vehicleType).filter(Boolean))
+            invList.forEach(inv => {
+                if (inv.shares && Array.isArray(inv.shares)) {
+                    inv.shares.forEach(sh => {
+                        if (sh.vehicleType) typesSet.add(sh.vehicleType)
+                    })
+                }
+            })
+            const types = [...typesSet]
             setUniqueVehicleTypes(types)
             
             // Initialize share percentages for any new types dynamically
@@ -66,19 +74,24 @@ export default function InvestorReport() {
     }
 
     const calculateReport = () => {
-        if (investors.length === 0 || vehicles.length === 0) return
+        if (investors.length === 0) return
 
-        // 1. Filter investor-owned vehicles
-        const investorVehicles = vehicles.filter(v => v.investorId)
-        
-        // 2. Group investor vehicles by type
-        const vehiclesByType = {}
-        investorVehicles.forEach(v => {
-            const type = v.vehicleType || 'Không rõ'
-            if (!vehiclesByType[type]) {
-                vehiclesByType[type] = []
+        // 1. Group investor shares by vehicleType
+        const investorSharesByType = {}
+        investors.forEach(inv => {
+            if (inv.shares && Array.isArray(inv.shares)) {
+                inv.shares.forEach(sh => {
+                    const type = sh.vehicleType || 'Không rõ'
+                    investorSharesByType[type] = (investorSharesByType[type] || 0) + (Number(sh.count) || 0)
+                })
             }
-            vehiclesByType[type].push(v)
+        })
+
+        // 2. Count total vehicles in DB by type
+        const dbVehiclesByType = {}
+        vehicles.forEach(v => {
+            const type = v.vehicleType || 'Không rõ'
+            dbVehiclesByType[type] = (dbVehiclesByType[type] || 0) + 1
         })
 
         // 3. Group monthly revenues by vehicleCode
@@ -92,17 +105,24 @@ export default function InvestorReport() {
 
         // 4. Calculate stats for each vehicle type
         const stats = {}
-        Object.keys(vehiclesByType).forEach(type => {
-            const typeVehicles = vehiclesByType[type]
-            const vehicleCount = typeVehicles.length
+        const allTypes = [...new Set([
+            ...Object.keys(investorSharesByType),
+            ...Object.keys(dbVehiclesByType)
+        ])].filter(t => t !== 'Không rõ')
+
+        allTypes.forEach(type => {
+            const vehicleCount = investorSharesByType[type] || 0
+            const totalVehiclesInDb = dbVehiclesByType[type] || 0
             
-            // Sum revenues for all investor vehicles of this type
+            // Sum revenues for all vehicles of this type
             let totalRevenue = 0
-            typeVehicles.forEach(v => {
-                totalRevenue += (revenueMapByCode[v.vehicleCode.toUpperCase()] || 0)
+            vehicles.forEach(v => {
+                if (v.vehicleType === type) {
+                    totalRevenue += (revenueMapByCode[v.vehicleCode.toUpperCase()] || 0)
+                }
             })
 
-            const avgRevenue = vehicleCount > 0 ? totalRevenue / vehicleCount : 0
+            const avgRevenue = totalVehiclesInDb > 0 ? totalRevenue / totalVehiclesInDb : 0
             const driverPct = sharePercentages[type] !== undefined ? sharePercentages[type] : 40
             const investorPct = 100 - driverPct
             const remainOne = (avgRevenue * investorPct) / 100
@@ -123,47 +143,36 @@ export default function InvestorReport() {
 
         // 5. Generate rows for each investor
         const rows = investors.map(inv => {
-            // Find all vehicles owned by this investor
-            const invVehicles = investorVehicles.filter(v => v.investorId === inv.id)
-            
-            // Group the investor's vehicles by type
-            const invVehiclesByType = {}
-            invVehicles.forEach(v => {
-                const type = v.vehicleType || 'Không rõ'
-                invVehiclesByType[type] = (invVehiclesByType[type] || 0) + 1
-            })
-
-            // Calculate total revenue contributed by this investor's vehicles
-            let totalContributedRevenue = 0
-            invVehicles.forEach(v => {
-                totalContributedRevenue += (revenueMapByCode[v.vehicleCode.toUpperCase()] || 0)
-            })
-
-            // Calculate total payout by summing payouts for each vehicle type
             let totalPayout = 0
             const breakdown = []
+            let vehiclesCount = 0
 
-            Object.keys(invVehiclesByType).forEach(type => {
-                const count = invVehiclesByType[type]
-                const typeStat = stats[type]
-                const payoutForType = typeStat ? typeStat.payoutOne * count : 0
-                totalPayout += payoutForType
+            if (inv.shares && Array.isArray(inv.shares)) {
+                inv.shares.forEach(sh => {
+                    const type = sh.vehicleType
+                    const count = Number(sh.count) || 0
+                    vehiclesCount += count
+                    
+                    const typeStat = stats[type]
+                    const payoutForType = typeStat ? typeStat.payoutOne * count : 0
+                    totalPayout += payoutForType
 
-                breakdown.push({
-                    type,
-                    count,
-                    avgRevenue: typeStat?.avgRevenue || 0,
-                    investorPct: typeStat?.investorPct || 60,
-                    payoutOne: typeStat?.payoutOne || 0,
-                    payoutForType
+                    breakdown.push({
+                        type,
+                        count,
+                        avgRevenue: typeStat?.avgRevenue || 0,
+                        investorPct: typeStat?.investorPct || 60,
+                        payoutOne: typeStat?.payoutOne || 0,
+                        payoutForType
+                    })
                 })
-            })
+            }
 
             return {
                 investor: inv,
-                vehiclesCount: invVehicles.length,
-                vehiclesListStr: invVehicles.map(v => v.vehicleCode).join(', '),
-                totalContributedRevenue,
+                vehiclesCount,
+                vehiclesListStr: inv.shares?.map(sh => `${sh.count}x ${sh.vehicleType}`).join(', ') || 'Chưa góp xe',
+                totalContributedRevenue: 0,
                 totalPayout,
                 breakdown
             }

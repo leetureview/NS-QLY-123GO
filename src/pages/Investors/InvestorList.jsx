@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Search, Edit2, Trash2, Users, Loader2, Phone, CreditCard, FileText } from 'lucide-react'
 import { investorStorage } from '../../utils/firebaseStorage'
+import { vehicleTypes } from '../../data/mockData'
 
 export default function InvestorList() {
     const [investors, setInvestors] = useState([])
@@ -17,7 +18,8 @@ export default function InvestorList() {
         phone: '',
         bankName: '',
         bankAccount: '',
-        note: ''
+        note: '',
+        shares: []
     })
     const [errors, setErrors] = useState({})
 
@@ -45,7 +47,8 @@ export default function InvestorList() {
                 phone: inv.phone || '',
                 bankName: inv.bankName || '',
                 bankAccount: inv.bankAccount || '',
-                note: inv.note || ''
+                note: inv.note || '',
+                shares: inv.shares || []
             })
         } else {
             setEditingId(null)
@@ -54,7 +57,8 @@ export default function InvestorList() {
                 phone: '',
                 bankName: '',
                 bankAccount: '',
-                note: ''
+                note: '',
+                shares: []
             })
         }
         setIsModalOpen(true)
@@ -63,7 +67,35 @@ export default function InvestorList() {
     const handleCloseModal = () => {
         setIsModalOpen(false)
         setEditingId(null)
-        setFormData({ name: '', phone: '', bankName: '', bankAccount: '', note: '' })
+        setFormData({ name: '', phone: '', bankName: '', bankAccount: '', note: '', shares: [] })
+    }
+
+    const handleAddShare = () => {
+        setFormData(prev => ({
+            ...prev,
+            shares: [...(prev.shares || []), { vehicleType: vehicleTypes[0] || 'VF5', count: 1 }]
+        }))
+    }
+
+    const handleRemoveShare = (idx) => {
+        setFormData(prev => ({
+            ...prev,
+            shares: prev.shares.filter((_, i) => i !== idx)
+        }))
+    }
+
+    const handleShareChange = (idx, field, value) => {
+        setFormData(prev => {
+            const updated = [...(prev.shares || [])]
+            updated[idx] = {
+                ...updated[idx],
+                [field]: field === 'count' ? Math.max(1, Number(value) || 1) : value
+            }
+            return {
+                ...prev,
+                shares: updated
+            }
+        })
     }
 
     const handleChange = (field) => (e) => {
@@ -182,6 +214,24 @@ export default function InvestorList() {
                                         <p className="text-[10px] text-gray-500 mt-0.5">{inv.bankName || 'Chưa cập nhật ngân hàng'}</p>
                                     </div>
                                 </div>
+                                
+                                {/* Xe góp vốn */}
+                                <div className="bg-purple-50/40 border border-purple-100 p-3 rounded-xl space-y-2 text-purple-700">
+                                    <p className="font-bold text-[10px] uppercase tracking-wider">Thông tin xe góp vốn:</p>
+                                    {inv.shares && inv.shares.length > 0 ? (
+                                        <div className="space-y-1">
+                                            {inv.shares.map((sh, idx) => (
+                                                <div key={idx} className="flex justify-between text-xs font-semibold">
+                                                    <span>{sh.vehicleType}</span>
+                                                    <span className="bg-purple-100/80 px-2 py-0.5 rounded text-[10px] font-bold">{sh.count} xe</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-[11px] italic text-purple-400">Chưa khai báo xe góp</p>
+                                    )}
+                                </div>
+
                                 {inv.note && (
                                     <div className="flex items-start gap-2 text-gray-500 bg-gray-50 p-2 rounded-lg">
                                         <FileText size={14} className="text-gray-400 mt-0.5" />
@@ -271,6 +321,56 @@ export default function InvestorList() {
                                         placeholder="Vietcombank" 
                                         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none text-sm" 
                                     />
+                                </div>
+                            </div>
+
+                            {/* Cấu hình góp vốn dòng xe động */}
+                            <div className="border-t border-gray-50 pt-4 space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Thông tin xe góp vốn</label>
+                                    <button 
+                                        type="button" 
+                                        onClick={handleAddShare}
+                                        className="text-taxi-600 hover:text-taxi-700 text-xs font-bold flex items-center gap-1"
+                                    >
+                                        <Plus size={12} /> Thêm dòng xe
+                                    </button>
+                                </div>
+
+                                <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                                    {formData.shares && formData.shares.map((sh, idx) => (
+                                        <div key={idx} className="flex items-center gap-2 bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                            <select
+                                                value={sh.vehicleType}
+                                                onChange={(e) => handleShareChange(idx, 'vehicleType', e.target.value)}
+                                                className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 focus:border-taxi-500 outline-none text-xs bg-white"
+                                            >
+                                                {vehicleTypes.map(t => (
+                                                    <option key={t} value={t}>{t}</option>
+                                                ))}
+                                            </select>
+                                            <input
+                                                type="number"
+                                                value={sh.count}
+                                                onChange={(e) => handleShareChange(idx, 'count', e.target.value)}
+                                                className="w-16 px-2.5 py-1.5 rounded-lg border border-gray-200 focus:border-taxi-500 outline-none text-center text-xs font-bold bg-white"
+                                                min="1"
+                                                placeholder="Số xe"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveShare(idx)}
+                                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {(!formData.shares || formData.shares.length === 0) && (
+                                        <p className="text-xs text-gray-400 italic text-center py-3 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                            Chưa cấu hình xe góp vốn. Bấm "Thêm dòng xe" để thiết lập.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
