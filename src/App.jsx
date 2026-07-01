@@ -16,6 +16,8 @@ import AdvanceList from './pages/Finance/AdvanceList'
 import AdvanceForm from './pages/Finance/AdvanceForm'
 import VehicleList from './pages/Vehicles/VehicleList'
 import VehicleForm from './pages/Vehicles/VehicleForm'
+import InvestorList from './pages/Investors/InvestorList'
+import InvestorReport from './pages/Investors/InvestorReport'
 
 function App() {
     return (
@@ -30,6 +32,8 @@ function App() {
                     <Route path="/vehicles" element={<VehicleList />} />
                     <Route path="/vehicles/new" element={<VehicleForm />} />
                     <Route path="/vehicles/edit/:id" element={<VehicleForm />} />
+                    <Route path="/investors" element={<InvestorList />} />
+                    <Route path="/investors/reports" element={<InvestorReport />} />
                     <Route path="/finance" element={<DepositList />} />
                     <Route path="/revenue" element={<RevenueList />} />
                     <Route path="/revenue/new" element={<RevenueForm />} />

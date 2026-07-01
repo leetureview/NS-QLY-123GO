@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Save, Car, Hash, Calendar, Loader2, CheckCircle2 } from 'lucide-react'
-import { vehicleStorage } from '../../utils/firebaseStorage'
+import { ArrowLeft, Save, Car, Hash, Calendar, Loader2, CheckCircle2, Users } from 'lucide-react'
+import { vehicleStorage, investorStorage } from '../../utils/firebaseStorage'
 import { vehicleTypes } from '../../data/mockData'
 
 export default function VehicleForm() {
@@ -15,17 +15,29 @@ export default function VehicleForm() {
         vehicleType: vehicleTypes[0] || 'VF5',
         registryExpiry: '',
         roadPermitExpiry: '',
-        status: 'active'
+        status: 'active',
+        investorId: ''
     })
+    const [investors, setInvestors] = useState([])
     const [errors, setErrors] = useState({})
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
 
     useEffect(() => {
+        loadInvestors()
         if (isEditing) {
             loadVehicle()
         }
     }, [id, isEditing])
+
+    const loadInvestors = async () => {
+        try {
+            const list = await investorStorage.getAll()
+            setInvestors(list)
+        } catch (error) {
+            console.error('Error loading investors:', error)
+        }
+    }
 
     const loadVehicle = async () => {
         setLoading(true)
@@ -38,7 +50,8 @@ export default function VehicleForm() {
                     vehicleType: vehicle.vehicleType || vehicleTypes[0],
                     registryExpiry: vehicle.registryExpiry || '',
                     roadPermitExpiry: vehicle.roadPermitExpiry || '',
-                    status: vehicle.status || 'active'
+                    status: vehicle.status || 'active',
+                    investorId: vehicle.investorId || ''
                 })
             } else {
                 navigate('/vehicles')
@@ -195,6 +208,26 @@ export default function VehicleForm() {
                             <option value="active">Đang hoạt động</option>
                             <option value="maintenance">Bảo dưỡng / Sửa chữa</option>
                             <option value="inactive">Tạm ngưng</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Investor Owner */}
+                <div className="grid grid-cols-1 gap-4 border-t border-gray-50 pt-4">
+                    <div>
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                            <Users size={16} className="text-taxi-500" />
+                            Nhà đầu tư sở hữu xe
+                        </label>
+                        <select 
+                            value={formData.investorId} 
+                            onChange={handleChange('investorId')} 
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none bg-white text-sm"
+                        >
+                            <option value="">-- Xe của Công ty (Không gán nhà đầu tư) --</option>
+                            {investors.map(inv => (
+                                <option key={inv.id} value={inv.id}>{inv.name} ({inv.phone})</option>
+                            ))}
                         </select>
                     </div>
                 </div>

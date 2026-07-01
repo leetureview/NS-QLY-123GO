@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Wallet, TrendingUp, Car, Menu, X, Moon, FileText, Settings, Receipt, HandCoins } from 'lucide-react'
+import { LayoutDashboard, Users, Wallet, TrendingUp, Car, Menu, X, Moon, FileText, Settings, Receipt, HandCoins, Coins, Handshake } from 'lucide-react'
 import { useState } from 'react'
 
 const menuItems = [
@@ -11,6 +11,8 @@ const menuItems = [
     { path: '/revenue', name: 'Quản lý doanh thu', icon: TrendingUp },
     { path: '/advances', name: 'Tạm ứng', icon: HandCoins },
     { path: '/expenses', name: 'Chi phí', icon: Receipt },
+    { path: '/investors', name: 'Nhà đầu tư', icon: Handshake },
+    { path: '/investors/reports', name: 'Báo cáo nhà đầu tư', icon: Coins },
 
     { path: '/reports', name: 'Báo cáo', icon: FileText },
     { path: '/settings', name: 'Cài đặt', icon: Settings },

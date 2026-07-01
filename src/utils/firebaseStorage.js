@@ -24,6 +24,7 @@ const COLLECTIONS = {
     ADVANCES: 'advances',
     PAYMENTS: 'payments',
     VEHICLES: 'vehicles',
+    INVESTORS: 'investors',
 }
 
 // Default settings
@@ -721,6 +722,60 @@ export const vehicleStorage = {
         } catch (error) {
             console.error('Error migrating vehicles from drivers:', error)
             throw error
+        }
+    }
+}
+
+export const investorStorage = {
+    getAll: async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, COLLECTIONS.INVESTORS))
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        } catch (error) {
+            console.error('Error getting investors:', error)
+            return []
+        }
+    },
+    getById: async (id) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.INVESTORS, id)
+            const docSnap = await getDoc(docRef)
+            return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null
+        } catch (error) {
+            console.error('Error getting investor:', error)
+            return null
+        }
+    },
+    add: async (investorData) => {
+        try {
+            const docRef = await addDoc(collection(db, COLLECTIONS.INVESTORS), {
+                ...investorData,
+                createdAt: new Date().toISOString()
+            })
+            return { id: docRef.id, ...investorData }
+        } catch (error) {
+            console.error('Error adding investor:', error)
+            throw error
+        }
+    },
+    update: async (id, investorData) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.INVESTORS, id)
+            await updateDoc(docRef, investorData)
+            return { id, ...investorData }
+        } catch (error) {
+            console.error('Error updating investor:', error)
+            throw error
+        }
+    },
+    delete: async (id) => {
+        try {
+            const docRef = doc(db, COLLECTIONS.INVESTORS, id)
+            await deleteDoc(docRef)
+            return true
+        } catch (error) {
+            console.error('Error deleting investor:', error)
+            return false
         }
     }
 }
