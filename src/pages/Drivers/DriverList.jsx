@@ -42,7 +42,10 @@ export default function DriverList() {
         let hasExpiringSoon = false
 
         const vehicle = vehicles.find(v => v.vehicleCode?.toUpperCase() === d.vehicleCode?.toUpperCase())
-        if (!vehicle) return null
+        const regExpiry = vehicle ? vehicle.registryExpiry : d.registryExpiry
+        const roadExpiry = vehicle ? vehicle.roadPermitExpiry : d.roadPermitExpiry
+
+        if (!regExpiry && !roadExpiry) return null
 
         const checkExpiry = (dateStr) => {
             if (!dateStr) return
@@ -53,8 +56,8 @@ export default function DriverList() {
             else if (diffDays <= 30) hasExpiringSoon = true
         }
 
-        checkExpiry(vehicle.registryExpiry)
-        checkExpiry(vehicle.roadPermitExpiry)
+        checkExpiry(regExpiry)
+        checkExpiry(roadExpiry)
 
         if (hasExpired) {
             return (

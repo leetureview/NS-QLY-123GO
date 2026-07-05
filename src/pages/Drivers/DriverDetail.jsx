@@ -238,15 +238,15 @@ export default function DriverDetail() {
                             {/* Hạn đăng kiểm */}
                             <div className="flex flex-col gap-1 py-1 border-b border-gray-50">
                                 <span className="text-gray-500 text-sm">Hạn đăng kiểm</span>
-                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(vehicle?.registryExpiry).classes}`}>
-                                    {getExpiryStatus(vehicle?.registryExpiry).label}
+                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(vehicle ? vehicle.registryExpiry : driver.registryExpiry).classes}`}>
+                                    {getExpiryStatus(vehicle ? vehicle.registryExpiry : driver.registryExpiry).label}
                                 </span>
                             </div>
                             {/* Hạn giấy đi đường */}
                             <div className="flex flex-col gap-1 py-1">
                                 <span className="text-gray-500 text-sm">Hạn giấy đi đường</span>
-                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(vehicle?.roadPermitExpiry).classes}`}>
-                                    {getExpiryStatus(vehicle?.roadPermitExpiry).label}
+                                <span className={`text-xs px-2.5 py-1.5 rounded-lg w-full text-center mt-1 ${getExpiryStatus(vehicle ? vehicle.roadPermitExpiry : driver.roadPermitExpiry).classes}`}>
+                                    {getExpiryStatus(vehicle ? vehicle.roadPermitExpiry : driver.roadPermitExpiry).label}
                                 </span>
                             </div>
                         </div>

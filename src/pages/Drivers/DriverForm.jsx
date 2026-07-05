@@ -20,6 +20,7 @@ export default function DriverForm() {
     })
     const [vehicles, setVehicles] = useState([])
     const [selectedVehicleId, setSelectedVehicleId] = useState('')
+    const [isManualVehicle, setIsManualVehicle] = useState(false)
     const [errors, setErrors] = useState({})
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
@@ -47,6 +48,8 @@ export default function DriverForm() {
                             const matched = vList.find(v => v.vehicleCode.toUpperCase() === driver.vehicleCode.toUpperCase())
                             if (matched) {
                                 setSelectedVehicleId(matched.id)
+                            } else {
+                                setIsManualVehicle(true)
                             }
                         }
                     } else {
@@ -61,10 +64,37 @@ export default function DriverForm() {
         initialize()
     }, [id, isEditing])
 
+    const toggleManualVehicle = () => {
+        setIsManualVehicle(prev => {
+            const nextVal = !prev
+            if (nextVal) {
+                setSelectedVehicleId('')
+            } else {
+                setFormData(prevForm => ({
+                    ...prevForm,
+                    vehicleCode: '',
+                    licensePlate: '',
+                    vehicleType: '',
+                    registryExpiry: '',
+                    roadPermitExpiry: ''
+                }))
+                setSelectedVehicleId('')
+            }
+            return nextVal
+        })
+    }
+
     const validate = () => {
         const newErrors = {}
         if (!formData.name.trim()) newErrors.name = 'Vui lòng nhập họ tên'
-        if (!selectedVehicleId) newErrors.vehicleId = 'Vui lòng chọn phương tiện giao cho tài xế'
+        
+        if (isManualVehicle) {
+            if (!formData.vehicleCode.trim()) newErrors.vehicleCode = 'Vui lòng nhập mã số xe'
+            if (!formData.licensePlate.trim()) newErrors.licensePlate = 'Vui lòng nhập biển kiểm soát'
+        } else {
+            if (!selectedVehicleId) newErrors.vehicleId = 'Vui lòng chọn phương tiện giao cho tài xế'
+        }
+        
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
     }
@@ -183,30 +213,110 @@ export default function DriverForm() {
                         {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
                     </div>
 
-                    {/* Chọn xe dropdown */}
+                    {/* Chọn xe hoặc Nhập thủ công */}
                     <div>
-                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                            <Car size={16} className="text-taxi-500" />
-                            Giao phương tiện
-                        </label>
-                        <select 
-                            value={selectedVehicleId} 
-                            onChange={handleVehicleChange} 
-                            className={`w-full px-4 py-3 rounded-xl border ${errors.vehicleId ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none bg-white text-sm`}
-                        >
-                            <option value="">-- Chọn xe giao cho tài xế --</option>
-                            {vehicles.map(v => (
-                                <option key={v.id} value={v.id}>
-                                    {v.vehicleCode} ({v.licensePlate} - {v.vehicleType})
-                                </option>
-                            ))}
-                        </select>
-                        {errors.vehicleId && <p className="text-red-500 text-xs mt-1">{errors.vehicleId}</p>}
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                <Car size={16} className="text-taxi-500" />
+                                Giao phương tiện
+                            </label>
+                            <button
+                                type="button"
+                                onClick={toggleManualVehicle}
+                                className="text-xs text-taxi-600 hover:text-taxi-700 font-semibold transition-colors focus:outline-none"
+                            >
+                                {isManualVehicle ? 'Chọn từ danh sách xe' : 'Nhập xe thủ công'}
+                            </button>
+                        </div>
+                        
+                        {isManualVehicle ? (
+                            <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 animate-fade-in">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Mã số xe</label>
+                                        <input
+                                            type="text"
+                                            value={formData.vehicleCode}
+                                            onChange={(e) => {
+                                                setFormData(prev => ({ ...prev, vehicleCode: e.target.value.toUpperCase() }))
+                                                if (errors.vehicleCode) setErrors(prev => ({ ...prev, vehicleCode: null }))
+                                            }}
+                                            placeholder="TX001"
+                                            className={`w-full px-4 py-2.5 rounded-xl border ${errors.vehicleCode ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none text-sm font-semibold`}
+                                        />
+                                        {errors.vehicleCode && <p className="text-red-500 text-xs mt-1">{errors.vehicleCode}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Biển kiểm soát</label>
+                                        <input
+                                            type="text"
+                                            value={formData.licensePlate}
+                                            onChange={(e) => {
+                                                setFormData(prev => ({ ...prev, licensePlate: e.target.value.toUpperCase() }))
+                                                if (errors.licensePlate) setErrors(prev => ({ ...prev, licensePlate: null }))
+                                            }}
+                                            placeholder="47H-12345"
+                                            className={`w-full px-4 py-2.5 rounded-xl border ${errors.licensePlate ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none text-sm font-semibold font-mono`}
+                                        />
+                                        {errors.licensePlate && <p className="text-red-500 text-xs mt-1">{errors.licensePlate}</p>}
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Dòng xe</label>
+                                        <select
+                                            value={formData.vehicleType}
+                                            onChange={handleChange('vehicleType')}
+                                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none bg-white text-sm"
+                                        >
+                                            <option value="">-- Chọn dòng xe --</option>
+                                            {vehicleTypes.map(t => (
+                                                <option key={t} value={t}>{t}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Hạn đăng kiểm</label>
+                                        <input
+                                            type="date"
+                                            value={formData.registryExpiry}
+                                            onChange={handleChange('registryExpiry')}
+                                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Hạn giấy đi đường</label>
+                                        <input
+                                            type="date"
+                                            value={formData.roadPermitExpiry}
+                                            onChange={handleChange('roadPermitExpiry')}
+                                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none text-sm"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <select 
+                                    value={selectedVehicleId} 
+                                    onChange={handleVehicleChange} 
+                                    className={`w-full px-4 py-3 rounded-xl border ${errors.vehicleId ? 'border-red-300' : 'border-gray-200'} focus:border-taxi-500 focus:ring-2 focus:ring-taxi-500/20 outline-none bg-white text-sm`}
+                                >
+                                    <option value="">-- Chọn xe giao cho tài xế --</option>
+                                    {vehicles.map(v => (
+                                        <option key={v.id} value={v.id}>
+                                            {v.vehicleCode} ({v.licensePlate} - {v.vehicleType})
+                                        </option>
+                                    ))}
+                                </select>
+                                {errors.vehicleId && <p className="text-red-500 text-xs mt-1">{errors.vehicleId}</p>}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Xem trước thông tin xe được chọn */}
-                    {selectedVehicleId && (
-                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 grid grid-cols-2 gap-4 text-xs">
+                    {/* Xem trước thông tin xe được chọn (chỉ khi chọn từ danh sách) */}
+                    {!isManualVehicle && selectedVehicleId && (
+                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 grid grid-cols-2 gap-4 text-xs animate-fade-in">
                             <div>
                                 <p className="text-gray-400">Biển kiểm soát</p>
                                 <p className="font-semibold text-gray-800 font-mono mt-0.5">{formData.licensePlate}</p>
